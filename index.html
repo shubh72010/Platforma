@@ -1,214 +1,430 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" >
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stickman Platformer</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stickman Platformer - Powerup Madness</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #222;
+      margin: 0; padding: 0; overflow: hidden; background: #111;
+      user-select: none; -webkit-user-select: none;
+      touch-action: manipulation;
     }
     canvas {
       display: block;
-      background: #111;
+      background: linear-gradient(to top, #333 0%, #111 100%);
     }
-    .controls {
+    .control {
       position: fixed;
-      bottom: 20px;
-      left: 0;
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      padding: 0 20px;
-      pointer-events: none;
-    }
-    .circle-btn {
-      width: 70px;
-      height: 70px;
-      background: rgba(255,255,255,0.2);
       border-radius: 50%;
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: white;
-      user-select: none;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(5px);
+      box-shadow: 0 0 10px rgba(255,255,255,0.1);
+      touch-action: none;
+      transition: background-color 0.2s;
+      user-select:none;
     }
-    .hud {
-      position: absolute;
-      top: 10px;
-      right: 10px;
+    #leftBtn, #rightBtn {
+      width: 80px; height: 80px;
+      bottom: 20px;
+      left: 20px;
+    }
+    #rightBtn {
+      left: 110px;
+    }
+    #jumpBtn {
+      width: 90px; height: 90px;
+      bottom: 30px;
+      right: 20px;
+    }
+    /* Press effect */
+    .pressed {
+      background-color: rgba(255, 255, 255, 0.35) !important;
+      box-shadow: 0 0 20px #88f;
+    }
+    #powerUpDisplay {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      color: #aaf;
+      font-family: monospace;
+      font-weight: bold;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+    }
+    .powerUpIcon {
+      width: 30px;
+      height: 30px;
+      border-radius: 5px;
+      background: #4488ff;
       color: white;
-      font-family: sans-serif;
-      font-size: 20px;
+      font-size: 18px;
+      text-align: center;
+      line-height: 30px;
+      font-weight: bold;
+      box-shadow: 0 0 8px #4488ffaa;
+      user-select: none;
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
 <canvas id="game"></canvas>
-<div class="controls">
-  <div style="display: flex; gap: 10px;">
-    <div class="circle-btn" id="leftBtn">&#9664;</div>
-    <div class="circle-btn" id="rightBtn">&#9654;</div>
-  </div>
-  <div class="circle-btn" id="jumpBtn">&#x21E7;</div>
-</div>
-<div class="hud" id="powerUpText">Power-Ups: None</div>
+
+<div id="leftBtn" class="control">←</div>
+<div id="rightBtn" class="control">→</div>
+<div id="jumpBtn" class="control">⭡</div>
+
+<div id="powerUpDisplay"></div>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-let width = window.innerWidth;
-let height = window.innerHeight;
-canvas.width = width;
-canvas.height = height;
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
 
-let gravity = 1.2;
-let platforms = [];
-let powerUps = [];
-let winBlock = {x: 0, y: 0, w: 60, h: 30};
+  let width, height;
+  function resize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width * devicePixelRatio;
+    canvas.height = height * devicePixelRatio;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+  }
+  resize();
+  window.addEventListener('resize', resize);
 
-let keys = {
-  left: false,
-  right: false,
-  up: false
-};
+  // Player (stick figure)
+  const player = {
+    x: 100,
+    y: 100,
+    w: 20,
+    h: 40,
+    vx: 0,
+    vy: 0,
+    grounded: false,
+    powerUps: new Set(),
+    jumpsUsed: 0,
+    maxJumps: 1,
+    frame: 0,
+    frameTimer: 0,
+    frameInterval: 5,
+  };
 
-const player = {
-  x: 100,
-  y: 100,
-  w: 40,
-  h: 40,
-  vx: 0,
-  vy: 0,
-  grounded: false,
-  powerUps: []
-};
+  // Gravity & physics
+  const gravity = 0.6;
+  const jumpPower = -12;
 
-function generateLevel() {
-  platforms = [];
-  powerUps = [];
-
-  for (let i = 0; i < 20; i++) {
-    let x = i * 200 + Math.random() * 100;
-    let y = height - (Math.random() * 200 + 100);
-    platforms.push({x, y, w: 150, h: 20});
-    if (Math.random() < 0.3) {
-      powerUps.push({x: x + 50, y: y - 30, collected: false});
+  // Platforms with fade in animation
+  let platforms = [];
+  function genPlatforms() {
+    platforms = [];
+    let yBase = height - 50;
+    platforms.push({x: 0, y: yBase, w: width, h: 20, alpha:0});
+    let px = 150;
+    while (px < width * 3) {
+      let py = yBase - (Math.random() * 100 + 40);
+      platforms.push({x: px, y: py, w: 100, h: 20, alpha:0});
+      px += 150 + Math.random() * 80;
     }
   }
+  genPlatforms();
 
-  winBlock.x = platforms[platforms.length - 1].x + 100;
-  winBlock.y = platforms[platforms.length - 1].y - 40;
-}
-generateLevel();
+  // Win block (glowing pulse)
+  let winBlock = {x: platforms[platforms.length - 1].x + 120, y: height - 90, w: 50, h: 50, pulse: 0};
 
-function update() {
-  player.vy += gravity;
-  player.x += player.vx;
-  player.y += player.vy;
+  // Powerups types
+  const POWERUP_TYPES = ['SPD','DJM','HJP','SFL']; // Speed, Double Jump, High Jump, Slow Fall
+  const POWERUP_DESCS = {
+    SPD: 'Speed Boost',
+    DJM: 'Double Jump',
+    HJP: 'High Jump',
+    SFL: 'Slow Fall'
+  };
 
-  player.grounded = false;
-  for (let plat of platforms) {
-    if (player.x + player.w > plat.x && player.x < plat.x + plat.w &&
-        player.y + player.h > plat.y && player.y + player.h < plat.y + plat.h) {
-      player.y = plat.y - player.h;
-      player.vy = 0;
-      player.grounded = true;
+  // Powerups (randomly on platforms) with pulse animation
+  let powerUps = [];
+  function genPowerUps() {
+    powerUps = [];
+    for (let i = 1; i < platforms.length - 1; i++) {
+      if (Math.random() < 0.5) {
+        powerUps.push({
+          x: platforms[i].x + platforms[i].w / 2 - 10,
+          y: platforms[i].y - 20,
+          collected: false,
+          type: POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)],
+          pulse: 0
+        });
+      }
     }
   }
+  genPowerUps();
 
-  for (let p of powerUps) {
-    if (!p.collected &&
-        player.x < p.x + 20 && player.x + player.w > p.x &&
-        player.y < p.y + 20 && player.y + player.h > p.y) {
-      p.collected = true;
-      player.powerUps.push("Speed");
-      document.getElementById("powerUpText").innerText = "Power-Ups: Speed";
+  // Controls
+  const keys = {left: false, right: false, jump: false};
+  const leftBtn = document.getElementById('leftBtn');
+  const rightBtn = document.getElementById('rightBtn');
+  const jumpBtn = document.getElementById('jumpBtn');
+
+  function setupButton(btn, key) {
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      keys[key] = true;
+      btn.classList.add('pressed');
+    });
+    btn.addEventListener('touchend', e => {
+      e.preventDefault();
+      keys[key] = false;
+      btn.classList.remove('pressed');
+    });
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault();
+      keys[key] = true;
+      btn.classList.add('pressed');
+    });
+    btn.addEventListener('mouseup', e => {
+      e.preventDefault();
+      keys[key] = false;
+      btn.classList.remove('pressed');
+    });
+    btn.addEventListener('mouseleave', e => {
+      e.preventDefault();
+      keys[key] = false;
+      btn.classList.remove('pressed');
+    });
+  }
+  setupButton(leftBtn, 'left');
+  setupButton(rightBtn, 'right');
+  setupButton(jumpBtn, 'jump');
+
+  // Reset player position and state
+  function resetPlayer() {
+    player.x = 100;
+    player.y = 100;
+    player.vx = 0;
+    player.vy = 0;
+    player.powerUps.clear();
+    player.maxJumps = 1;
+    player.jumpsUsed = 0;
+    updatePowerUpDisplay();
+  }
+
+  // Update power-up display
+  const powerUpDisplay = document.getElementById('powerUpDisplay');
+  function updatePowerUpDisplay() {
+    powerUpDisplay.innerHTML = '';
+    if (player.powerUps.size === 0) {
+      powerUpDisplay.textContent = 'Power-Ups: None';
+      return;
     }
+    player.powerUps.forEach(pu => {
+      const div = document.createElement('div');
+      div.className = 'powerUpIcon';
+      div.title = POWERUP_DESCS[pu];
+      div.textContent = pu;
+      powerUpDisplay.appendChild(div);
+    });
   }
 
-  if (player.x + player.w > winBlock.x && player.x < winBlock.x + winBlock.w &&
-      player.y + player.h > winBlock.y && player.y < winBlock.y + winBlock.h) {
-    alert("YOU WIN!");
-    location.reload();
+  // Draw stickman with limb animation
+  function drawPlayer() {
+    const px = player.x;
+    const py = player.y;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#AAF';
+    ctx.fillStyle = '#44F';
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(px + player.w/2, py + 10, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.moveTo(px + player.w/2, py + 18);
+    ctx.lineTo(px + player.w/2, py + 38);
+    ctx.stroke();
+
+    // Arms swinging
+    const swing = Math.sin(player.frame / 6) * 12;
+    ctx.beginPath();
+    // Left arm
+    ctx.moveTo(px + player.w / 2, py + 22);
+    ctx.lineTo(px + player.w / 2 - 15, py + 22 + swing);
+    // Right arm
+    ctx.moveTo(px + player.w / 2, py + 22);
+    ctx.lineTo(px + player.w / 2 + 15, py + 22 - swing);
+    ctx.stroke();
+
+    // Legs swinging
+    ctx.beginPath();
+    // Left leg
+    ctx.moveTo(px + player.w / 2, py + 38);
+    ctx.lineTo(px + player.w / 2 - 10, py + 38 + 20 + swing);
+    // Right leg
+    ctx.moveTo(px + player.w / 2, py + 38);
+    ctx.lineTo(px + player.w / 2 + 10, py + 38 + 20 - swing);
+    ctx.stroke();
   }
 
-  // Move boundaries
-  if (keys.left) player.vx = -5;
-  else if (keys.right) player.vx = player.powerUps.includes("Speed") ? 8 : 5;
-  else player.vx = 0;
-
-  requestAnimationFrame(update);
-  draw();
-}
-
-function draw() {
-  ctx.clearRect(0, 0, width, height);
-
-  // Draw platforms
-  ctx.fillStyle = "#444";
-  for (let plat of platforms) {
-    ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  // Draw platforms with fade-in alpha and pulse for power-ups
+  function drawPlatforms() {
+    platforms.forEach(p => {
+      if (p.alpha < 1) p.alpha += 0.02;
+      ctx.fillStyle = `rgba(100, 150, 255, ${p.alpha})`;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+    });
   }
 
-  // Draw power-ups
-  ctx.fillStyle = "yellow";
-  for (let p of powerUps) {
-    if (!p.collected) ctx.fillRect(p.x, p.y, 20, 20);
+  // Draw power-ups with pulsing effect
+  function drawPowerUps() {
+    powerUps.forEach(pu => {
+      if (pu.collected) return;
+      pu.pulse += 0.1;
+      const pulseAlpha = 0.5 + Math.sin(pu.pulse) * 0.5;
+      ctx.fillStyle = `rgba(255, 215, 0, ${pulseAlpha})`;
+      ctx.beginPath();
+      ctx.arc(pu.x + 10, pu.y + 10, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#444';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pu.type, pu.x + 10, pu.y + 10);
+    });
   }
 
-  // Draw win block
-  ctx.fillStyle = "lime";
-  ctx.fillRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
+  // Draw win block with glowing pulse
+  function drawWinBlock() {
+    winBlock.pulse += 0.05;
+    const glow = 0.6 + Math.sin(winBlock.pulse) * 0.4;
+    ctx.fillStyle = `rgba(0, 255, 128, ${glow})`;
+    ctx.fillRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
+    ctx.strokeStyle = `rgba(0, 255, 128, ${glow})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
+  }
 
-  // Draw player (animated stickman)
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 3;
-  let cx = player.x + player.w / 2;
-  let cy = player.y + player.h / 2;
+  // Physics and collision
+  function updatePhysics() {
+    // Apply horizontal movement speed boost power-up
+    let speed = 4;
+    if (player.powerUps.has('SPD')) speed = 7;
 
-  // Head
-  ctx.beginPath();
-  ctx.arc(cx, player.y + 8, 8, 0, Math.PI * 2);
-  ctx.stroke();
+    if (keys.left) player.vx = -speed;
+    else if (keys.right) player.vx = speed;
+    else player.vx = 0;
 
-  // Body
-  ctx.beginPath();
-  ctx.moveTo(cx, player.y + 16);
-  ctx.lineTo(cx, player.y + 30);
-  ctx.stroke();
+    // Gravity modification for Slow Fall power-up
+    let currentGravity = gravity;
+    if (player.powerUps.has('SFL')) currentGravity = 0.15;
 
-  // Arms
-  ctx.beginPath();
-  ctx.moveTo(cx - 10, player.y + 20);
-  ctx.lineTo(cx + 10, player.y + 20);
-  ctx.stroke();
+    player.vy += currentGravity;
 
-  // Legs
-  ctx.beginPath();
-  ctx.moveTo(cx, player.y + 30);
-  ctx.lineTo(cx - 10, player.y + 40);
-  ctx.moveTo(cx, player.y + 30);
-  ctx.lineTo(cx + 10, player.y + 40);
-  ctx.stroke();
-}
+    // Jump handling
+    if (keys.jump) {
+      if (player.grounded || (player.powerUps.has('DJM') && player.jumpsUsed < player.maxJumps)) {
+        player.vy = jumpPower * (player.powerUps.has('HJP') ? 1.5 : 1);
+        player.grounded = false;
+        player.jumpsUsed++;
+        keys.jump = false; // prevent holding jump
+      }
+    }
 
-document.getElementById("leftBtn").addEventListener("touchstart", () => keys.left = true);
-document.getElementById("leftBtn").addEventListener("touchend", () => keys.left = false);
-document.getElementById("rightBtn").addEventListener("touchstart", () => keys.right = true);
-document.getElementById("rightBtn").addEventListener("touchend", () => keys.right = false);
-document.getElementById("jumpBtn").addEventListener("touchstart", () => {
-  if (player.grounded) {
-    player.vy = -18;
+    // Update player position
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Prevent falling off bottom (reset)
+    if (player.y > height + 100) {
+      resetPlayer();
+    }
+
+    // Ground collision and platform collision
     player.grounded = false;
-  }
-});
+    for (const p of platforms) {
+      if (player.x + player.w > p.x && player.x < p.x + p.w) {
+        if (player.y + player.h > p.y && player.y + player.h < p.y + p.h + 20 && player.vy >= 0) {
+          player.y = p.y - player.h;
+          player.vy = 0;
+          player.grounded = true;
+          player.jumpsUsed = 0;
+        }
+      }
+    }
 
-update();
+    // Win condition
+    if (
+      player.x + player.w > winBlock.x &&
+      player.x < winBlock.x + winBlock.w &&
+      player.y + player.h > winBlock.y &&
+      player.y < winBlock.y + winBlock.h
+    ) {
+      alert('You Win! Restarting...');
+      resetGame();
+    }
+  }
+
+  // Check power-up collection
+  function checkPowerUpCollection() {
+    powerUps.forEach(pu => {
+      if (pu.collected) return;
+      if (
+        player.x + player.w > pu.x &&
+        player.x < pu.x + 20 &&
+        player.y + player.h > pu.y &&
+        player.y < pu.y + 20
+      ) {
+        pu.collected = true;
+        player.powerUps.add(pu.type);
+        if (pu.type === 'DJM') player.maxJumps = 2;
+        updatePowerUpDisplay();
+      }
+    });
+  }
+
+  // Reset whole game state
+  function resetGame() {
+    genPlatforms();
+    genPowerUps();
+    player.powerUps.clear();
+    player.maxJumps = 1;
+    player.jumpsUsed = 0;
+    updatePowerUpDisplay();
+    resetPlayer();
+  }
+
+  // Game loop
+  function loop() {
+    ctx.clearRect(0, 0, width, height);
+
+    drawPlatforms();
+    drawPowerUps();
+    drawWinBlock();
+    drawPlayer();
+
+    updatePhysics();
+    checkPowerUpCollection();
+
+    // Animate player frames
+    player.frameTimer++;
+    if (player.frameTimer >= player.frameInterval) {
+      player.frame++;
+      player.frameTimer = 0;
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  resetGame();
+  loop();
+})();
 </script>
+
 </body>
 </html>
