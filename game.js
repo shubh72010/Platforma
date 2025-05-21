@@ -1,38 +1,65 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const leftBtn = document.getElementById('leftBtn');
+const jumpBtn = document.getElementById('jumpBtn');
+const winMessage = document.getElementById('winMessage');
+
+let canvasWidth, canvasHeight;
+
+// Adaptive resize for canvas to fill screen but keep 16:9 ratio
+function resize() {
+  const windowRatio = window.innerWidth / window.innerHeight;
+  const gameRatio = 16 / 9;
+
+  if (windowRatio > gameRatio) {
+    // window wider than game ratio
+    canvasHeight = window.innerHeight;
+    canvasWidth = canvasHeight * gameRatio;
+  } else {
+    // window taller than game ratio
+    canvasWidth = window.innerWidth;
+    canvasHeight = canvasWidth / gameRatio;
+  }
+
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+}
+resize();
+window.addEventListener('resize', resize);
 
 const gravity = 0.8;
 const friction = 0.8;
 
 class Player {
   constructor() {
-    this.width = 40;
-    this.height = 60;
-    this.x = 50;
-    this.y = canvas.height - this.height - 10;
+    this.width = 40 * (canvasWidth / 800);
+    this.height = 60 * (canvasHeight / 450);
+    this.x = 50 * (canvasWidth / 800);
+    this.y = canvasHeight - this.height - 10 * (canvasHeight / 450);
     this.velX = 0;
     this.velY = 0;
-    this.speed = 5;
+    this.speed = 5 * (canvasWidth / 800);
     this.jumping = false;
     this.grounded = false;
   }
 
   update() {
-    if (keys['right']) {
-      if (this.velX < this.speed) this.velX++;
-    }
     if (keys['left']) {
-      if (this.velX > -this.speed) this.velX--;
+      if (this.velX > -this.speed) this.velX -= 1;
+    } else {
+      // Slow down smoothly if no left pressed
+      this.velX *= friction;
     }
-    if (keys['up']) {
+    // No right movement, just left and jump for now
+
+    if (keys['jump']) {
       if (!this.jumping && this.grounded) {
         this.jumping = true;
         this.grounded = false;
-        this.velY = -15;
+        this.velY = -15 * (canvasHeight / 450);
       }
     }
 
-    this.velX *= friction;
     this.velY += gravity;
 
     this.x += this.velX;
@@ -55,40 +82,41 @@ class Player {
 }
 
 class Platform {
-  constructor(x, y, w, h) {
+  constructor(x, y, w, h, isGoal = false) {
     this.x = x;
     this.y = y;
     this.width = w;
     this.height = h;
+    this.isGoal = isGoal;
   }
 
   draw() {
-    ctx.fillStyle = '#555';
+    ctx.fillStyle = this.isGoal ? '#ff0' : '#555';
     ctx.fillRect(this.x, this.y, this.width, this.height);
   }
 }
 
 const player = new Player();
 let platforms = [];
+let gameWon = false;
 
 const keys = {};
 
-// Auto-generate platforms for level
+// Auto-generate platforms with goal platform at the right end
 function generatePlatforms() {
   platforms = [];
-  // Ground platform always present
-  platforms.push(new Platform(0, canvas.height - 10, canvas.width, 10));
+  platforms.push(new Platform(0, canvas.height - 10, canvas.width, 10)); // ground
 
-  let xPos = 100;
-  while (xPos < canvas.width - 50) {
-    // random platform width 50-120
-    const width = 50 + Math.random() * 70;
-    // random y between 150 and canvas.height - 50
-    const yPos = 150 + Math.random() * (canvas.height - 200);
-    platforms.push(new Platform(xPos, yPos, width, 10));
-    // increase xPos by platform width + random gap 80-150
-    xPos += width + 80 + Math.random() * 70;
+  let xPos = 100 * (canvasWidth / 800);
+  while (xPos < canvasWidth - 150) {
+    const width = (50 + Math.random() * 70) * (canvasWidth / 800);
+    const yPos = 150 * (canvasHeight / 450) + Math.random() * (canvasHeight - 200 * (canvasHeight / 450));
+    platforms.push(new Platform(xPos, yPos, width, 10 * (canvasHeight / 450)));
+    xPos += width + (80 + Math.random() * 70) * (canvasWidth / 800);
   }
+
+  // Goal platform at the far right
+  platforms.push(new Platform(canvasWidth - 120 * (canvasWidth / 800), canvasHeight - 60 * (canvasHeight / 450), 100 * (canvasWidth / 800), 15 * (canvasHeight / 450), true));
 }
 
 function collisionCheck(rect1, rect2) {
@@ -101,6 +129,8 @@ function collisionCheck(rect1, rect2) {
 }
 
 function update() {
+  if (gameWon) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   player.grounded = false;
@@ -116,6 +146,11 @@ function update() {
         player.velY = 0;
         player.jumping = false;
         player.grounded = true;
+
+        if (plat.isGoal) {
+          gameWon = true;
+          winMessage.style.display = 'block';
+        }
       }
     }
     plat.draw();
@@ -127,53 +162,41 @@ function update() {
   requestAnimationFrame(update);
 }
 
-// Mobile buttons setup
-const controlsDiv = document.createElement('div');
-controlsDiv.style.position = 'fixed';
-controlsDiv.style.bottom = '20px';
-controlsDiv.style.left = '50%';
-controlsDiv.style.transform = 'translateX(-50%)';
-controlsDiv.style.display = 'flex';
-controlsDiv.style.gap = '20px';
-document.body.appendChild(controlsDiv);
-
-function createButton(name) {
-  const btn = document.createElement('button');
-  btn.innerText = name;
-  btn.style.fontSize = '24px';
-  btn.style.padding = '10px 20px';
-  btn.style.borderRadius = '10px';
-  btn.style.border = 'none';
-  btn.style.background = '#444';
-  btn.style.color = '#fff';
-  btn.style.userSelect = 'none';
-  btn.style.touchAction = 'none'; // prevent default scroll on touch
-
+// Touch / Mouse for mobile controls
+function setupControlButton(btn, keyName) {
   btn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    keys[name.toLowerCase()] = true;
+    keys[keyName] = true;
   });
   btn.addEventListener('touchend', (e) => {
     e.preventDefault();
-    keys[name.toLowerCase()] = false;
+    keys[keyName] = false;
   });
-  return btn;
+  btn.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    keys[keyName] = true;
+  });
+  btn.addEventListener('mouseup', (e) => {
+    e.preventDefault();
+    keys[keyName] = false;
+  });
+  btn.addEventListener('mouseleave', (e) => {
+    e.preventDefault();
+    keys[keyName] = false;
+  });
 }
 
-controlsDiv.appendChild(createButton('Left'));
-controlsDiv.appendChild(createButton('Up'));
-controlsDiv.appendChild(createButton('Right'));
+setupControlButton(leftBtn, 'left');
+setupControlButton(jumpBtn, 'jump');
 
-// Keyboard support too
+// Keyboard fallback (left arrow and space)
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight') keys['right'] = true;
   if (e.key === 'ArrowLeft') keys['left'] = true;
-  if (e.key === 'ArrowUp') keys['up'] = true;
+  if (e.key === ' ') keys['jump'] = true;
 });
 window.addEventListener('keyup', (e) => {
-  if (e.key === 'ArrowRight') keys['right'] = false;
   if (e.key === 'ArrowLeft') keys['left'] = false;
-  if (e.key === 'ArrowUp') keys['up'] = false;
+  if (e.key === ' ') keys['jump'] = false;
 });
 
 generatePlatforms();
