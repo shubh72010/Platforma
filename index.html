@@ -1,269 +1,293 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" >
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Platformer with Buttons</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; overflow: hidden; height: 100%;
-    background: #111;
-    touch-action: none;
-    font-family: monospace;
-  }
-  canvas {
-    display: block;
-    background: #222;
-  }
-  button {
-    position: fixed;
-    bottom: 20px;
-    width: 100px;
-    height: 60px;
-    font-size: 20px;
-    font-weight: bold;
-    color: white;
-    background: #444;
-    border: 2px solid #888;
-    border-radius: 10px;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-  }
-  #leftBtn {
-    left: 20px;
-  }
-  #jumpBtn {
-    right: 20px;
-  }
-  #winMessage {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    color: lime;
-    font-size: 48px;
-    font-family: monospace;
-    display: none;
-    pointer-events: none;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Platformer: Move Left + Jump</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; overflow: hidden; height: 100%;
+      background: #111;
+      touch-action: none;
+      font-family: monospace;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      background: #222;
+      width: 100vw;
+      height: 100vh;
+    }
+    button {
+      position: fixed;
+      bottom: 30px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      background: rgba(68, 68, 68, 0.8);
+      border: 3px solid #888;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #leftBtn {
+      left: 30px;
+    }
+    #jumpBtn {
+      right: 30px;
+    }
+    #winMessage {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: lime;
+      font-size: 48px;
+      font-family: monospace;
+      display: none;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
 </head>
 <body>
+  <canvas id="game"></canvas>
 
-<canvas id="game"></canvas>
+  <button id="leftBtn">←</button>
+  <button id="jumpBtn">↑</button>
+  <div id="winMessage">YOU WIN!</div>
 
-<button id="leftBtn">LEFT</button>
-<button id="jumpBtn">JUMP</button>
-<div id="winMessage">YOU WIN!</div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const leftBtn = document.getElementById('leftBtn');
+    const jumpBtn = document.getElementById('jumpBtn');
+    const winMessage = document.getElementById('winMessage');
 
-<script>
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const leftBtn = document.getElementById('leftBtn');
-  const jumpBtn = document.getElementById('jumpBtn');
-  const winMessage = document.getElementById('winMessage');
-
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  const player = {
-    x: 50,
-    y: 0,
-    width: 20,
-    height: 40,
-    vy: 0,
-    gravity: 0.8,
-    jumpPower: -15,
-    speed: 3,
-    onGround: false,
-    frame: 0,
-    frameCount: 0,
-    frameMax: 10,
-    update() {
-      this.vy += this.gravity;
-      this.y += this.vy;
-
-      if (this.y + this.height > canvas.height) {
-        this.y = canvas.height - this.height;
-        this.vy = 0;
-        this.onGround = true;
-      } else {
-        this.onGround = false;
-      }
-
-      if (keys.left) {
-        this.x -= this.speed;
-        if (this.x < 0) this.x = 0;
-      }
-
-      if (keys.jump && this.onGround) {
-        this.vy = this.jumpPower;
-        this.onGround = false;
-      }
-
-      this.frameCount++;
-      if (this.frameCount >= this.frameMax) {
-        this.frameCount = 0;
-        this.frame = (this.frame + 1) % 4;
-      }
-    },
-    draw() {
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-
-      ctx.beginPath();
-      ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.2);
-      ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.8);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(this.x + this.width / 2, this.y + this.height * 0.1, this.width / 2, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.beginPath();
-      if (this.frame === 0 || this.frame === 2) {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.6);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.6);
-      } else {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.5);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.7);
-      }
-      ctx.stroke();
-
-      ctx.beginPath();
-      if (this.frame === 0 || this.frame === 2) {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height);
-      } else {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height * 0.9);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height * 0.9);
-      }
-      ctx.stroke();
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
-  };
+    window.addEventListener('resize', resize);
+    resize();
 
-  class Platform {
-    constructor(x, y, width, height, isGoal = false) {
-      this.x = x;
-      this.y = y;
-      this.width = width;
-      this.height = height;
-      this.isGoal = isGoal;
+    const player = {
+      x: 50,
+      y: 0,
+      width: 20,
+      height: 40,
+      vy: 0,
+      gravity: 0.8,
+      jumpPower: -15,
+      speed: 3,
+      onGround: false,
+      frame: 0,
+      frameCount: 0,
+      frameMax: 10,
+      update() {
+        this.vy += this.gravity;
+        this.y += this.vy;
+
+        if (this.y + this.height > canvas.height) {
+          this.y = canvas.height - this.height;
+          this.vy = 0;
+          this.onGround = true;
+        } else {
+          this.onGround = false;
+        }
+
+        if (keys.left) {
+          this.x -= this.speed;
+          if (this.x < 0) this.x = 0;
+        }
+
+        this.frameCount++;
+        if (this.frameCount >= this.frameMax) {
+          this.frameCount = 0;
+          this.frame = (this.frame + 1) % 4;
+        }
+      },
+      draw() {
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+
+        // Head
+        ctx.beginPath();
+        ctx.arc(this.x + this.width / 2, this.y + this.height * 0.1, this.width / 2, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Body
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.2);
+        ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.8);
+        ctx.stroke();
+
+        // Arms (simple animation)
+        ctx.beginPath();
+        if (this.frame === 0 || this.frame === 2) {
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+          ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.6);
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+          ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.6);
+        } else {
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+          ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.5);
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+          ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.7);
+        }
+        ctx.stroke();
+
+        // Legs (simple animation)
+        ctx.beginPath();
+        if (this.frame === 0 || this.frame === 2) {
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+          ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height);
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+          ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height);
+        } else {
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+          ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height * 0.9);
+          ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+          ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height * 0.9);
+        }
+        ctx.stroke();
+      }
+    };
+
+    class Platform {
+      constructor(x, y, width, height, isGoal = false) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.isGoal = isGoal;
+      }
+      draw() {
+        ctx.fillStyle = this.isGoal ? 'gold' : 'white';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
     }
-    draw() {
-      ctx.fillStyle = this.isGoal ? 'gold' : 'white';
-      ctx.fillRect(this.x, this.y, this.width, this.height);
+
+    let platforms = [];
+
+    function generatePlatforms() {
+      platforms = [];
+      platforms.push(new Platform(0, canvas.height - 40, canvas.width, 40));
+      for (let i = 0; i < 6; i++) {
+        let w = 80 + Math.random() * 60;
+        let x = Math.random() * (canvas.width - w);
+        let y = canvas.height - 100 - i * 80 - Math.random() * 40;
+        platforms.push(new Platform(x, y, w, 20));
+      }
+      let lastPlat = platforms[platforms.length - 1];
+      platforms.push(new Platform(lastPlat.x + 50, lastPlat.y - 80, 80, 20, true));
     }
-  }
 
-  let platforms = [];
+    let keys = { left: false };
+    let jumpPressed = false;
 
-  function generatePlatforms() {
-    platforms = [];
-    platforms.push(new Platform(0, canvas.height - 40, canvas.width, 40));
-    for (let i = 0; i < 6; i++) {
-      let w = 80 + Math.random() * 60;
-      let x = Math.random() * (canvas.width - w);
-      let y = canvas.height - 100 - i * 80 - Math.random() * 40;
-      platforms.push(new Platform(x, y, w, 20));
+    function playerJump() {
+      if (player.onGround) {
+        player.vy = player.jumpPower;
+        player.onGround = false;
+      }
     }
-    let lastPlat = platforms[platforms.length - 1];
-    platforms.push(new Platform(lastPlat.x + 50, lastPlat.y - 80, 80, 20, true));
-  }
 
-  let keys = { left: false, jump: false };
+    // Left button handlers (move left)
+    leftBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      keys.left = true;
+    });
+    leftBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      keys.left = false;
+    });
+    leftBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      keys.left = true;
+    });
+    leftBtn.addEventListener('mouseup', (e) => {
+      e.preventDefault();
+      keys.left = false;
+    });
+    leftBtn.addEventListener('mouseleave', (e) => {
+      e.preventDefault();
+      keys.left = false;
+    });
 
-  function update() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Jump button handlers (tap to jump)
+    jumpBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (!jumpPressed) {
+        jumpPressed = true;
+        playerJump();
+      }
+    });
+    jumpBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      jumpPressed = false;
+    });
+    jumpBtn.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (!jumpPressed) {
+        jumpPressed = true;
+        playerJump();
+      }
+    });
+    jumpBtn.addEventListener('mouseup', (e) => {
+      e.preventDefault();
+      jumpPressed = false;
+    });
+    jumpBtn.addEventListener('mouseleave', (e) => {
+      e.preventDefault();
+      jumpPressed = false;
+    });
 
-    player.update();
+    function checkCollision(player, platform) {
+      return (
+        player.x < platform.x + platform.width &&
+        player.x + player.width > platform.x &&
+        player.y + player.height <= platform.y + 10 &&
+        player.y + player.height + player.vy >= platform.y
+      );
+    }
 
-    player.onGround = false;
-    for (let plat of platforms) {
-      if (
-        player.x + player.width > plat.x &&
-        player.x < plat.x + plat.width &&
-        player.y + player.height > plat.y &&
-        player.y + player.height < plat.y + plat.height + player.vy
-      ) {
-        player.y = plat.y - player.height;
-        player.vy = 0;
-        player.onGround = true;
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (plat.isGoal) {
-          winMessage.style.display = 'block';
-          return;
+      player.update();
+
+      // Check platform collisions
+      for (const p of platforms) {
+        if (checkCollision(player, p)) {
+          player.y = p.y - player.height;
+          player.vy = 0;
+          player.onGround = true;
+
+          if (p.isGoal) {
+            winMessage.style.display = 'block';
+          }
         }
       }
+
+      // Draw platforms
+      platforms.forEach(p => p.draw());
+
+      // Draw player
+      player.draw();
+
+      requestAnimationFrame(gameLoop);
     }
 
-    for (let plat of platforms) {
-      plat.draw();
-    }
-
-    player.draw();
-
-    requestAnimationFrame(update);
-  }
-
-  // Buttons touch/mouse handlers
-  function buttonDown(key) {
-    keys[key] = true;
-  }
-  function buttonUp(key) {
-    keys[key] = false;
-  }
-
-  leftBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    buttonDown('left');
-  });
-  leftBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    buttonUp('left');
-  });
-  leftBtn.addEventListener('mousedown', () => buttonDown('left'));
-  leftBtn.addEventListener('mouseup', () => buttonUp('left'));
-  leftBtn.addEventListener('mouseleave', () => buttonUp('left'));
-
-  jumpBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    buttonDown('jump');
-  });
-  jumpBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    buttonUp('jump');
-  });
-  jumpBtn.addEventListener('mousedown', () => buttonDown('jump'));
-  jumpBtn.addEventListener('mouseup', () => buttonUp('jump'));
-  jumpBtn.addEventListener('mouseleave', () => buttonUp('jump'));
-
-  // Keyboard for testing
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') keys.left = true;
-    if (e.key === ' ') keys.jump = true;
-  });
-  window.addEventListener('keyup', (e) => {
-    if (e.key === 'ArrowLeft') keys.left = false;
-    if (e.key === ' ') keys.jump = false;
-  });
-
-  generatePlatforms();
-  update();
-</script>
-
+    generatePlatforms();
+    gameLoop();
+  </script>
 </body>
 </html>
