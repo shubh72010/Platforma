@@ -1,428 +1,445 @@
 <!DOCTYPE html>
-<html lang="en" >
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Stickman Platformer - Powerup Madness</title>
-  <style>
-    html, body {
-      margin: 0; padding: 0; overflow: hidden; background: #111;
-      user-select: none; -webkit-user-select: none;
-      touch-action: manipulation;
-    }
-    canvas {
-      display: block;
-      background: linear-gradient(to top, #333 0%, #111 100%);
-    }
-    .control {
-      position: fixed;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.15);
-      backdrop-filter: blur(5px);
-      box-shadow: 0 0 10px rgba(255,255,255,0.1);
-      touch-action: none;
-      transition: background-color 0.2s;
-      user-select:none;
-    }
-    #leftBtn, #rightBtn {
-      width: 80px; height: 80px;
-      bottom: 20px;
-      left: 20px;
-    }
-    #rightBtn {
-      left: 110px;
-    }
-    #jumpBtn {
-      width: 90px; height: 90px;
-      bottom: 30px;
-      right: 20px;
-    }
-    /* Press effect */
-    .pressed {
-      background-color: rgba(255, 255, 255, 0.35) !important;
-      box-shadow: 0 0 20px #88f;
-    }
-    #powerUpDisplay {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      color: #aaf;
-      font-family: monospace;
-      font-weight: bold;
-      user-select: none;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 5px;
-    }
-    .powerUpIcon {
-      width: 30px;
-      height: 30px;
-      border-radius: 5px;
-      background: #4488ff;
-      color: white;
-      font-size: 18px;
-      text-align: center;
-      line-height: 30px;
-      font-weight: bold;
-      box-shadow: 0 0 8px #4488ffaa;
-      user-select: none;
-      font-family: monospace;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Platformer with Mode Toggle</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+    font-family: monospace;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  canvas {
+    display: block;
+    background: #121212;
+  }
+  #scoreboard {
+    position: fixed;
+    top: 12px; right: 12px;
+    color: #fff;
+    font-size: 1.3rem;
+    font-weight: bold;
+    z-index: 20;
+  }
+  #modeToggle {
+    position: fixed;
+    top: 12px; left: 12px;
+    background: #282828;
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    font-size: 1rem;
+    cursor: pointer;
+    border-radius: 6px;
+    user-select: none;
+    z-index: 20;
+  }
+  /* Control circles */
+  .control-circle {
+    position: fixed;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid #aaa;
+    user-select: none;
+    touch-action: manipulation;
+    z-index: 15;
+  }
+  #leftBtn {
+    bottom: 25px;
+    left: 25px;
+  }
+  #rightBtn {
+    bottom: 25px;
+    left: 115px;
+  }
+  #jumpBtn {
+    bottom: 25px;
+    right: 25px;
+  }
+</style>
 </head>
 <body>
+
+<div id="scoreboard">Score: 0</div>
+<button id="modeToggle">Mode: Horizontal</button>
+
+<div id="leftBtn" class="control-circle"></div>
+<div id="rightBtn" class="control-circle"></div>
+<div id="jumpBtn" class="control-circle"></div>
+
 <canvas id="game"></canvas>
-
-<div id="leftBtn" class="control">←</div>
-<div id="rightBtn" class="control">→</div>
-<div id="jumpBtn" class="control">⭡</div>
-
-<div id="powerUpDisplay"></div>
 
 <script>
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-
-  let width, height;
-  function resize() {
-    width = window.innerWidth;
-    height = window.innerHeight;
-    canvas.width = width * devicePixelRatio;
-    canvas.height = height * devicePixelRatio;
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(devicePixelRatio, devicePixelRatio);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Player (stick figure)
-  const player = {
-    x: 100,
-    y: 100,
-    w: 20,
-    h: 40,
-    vx: 0,
-    vy: 0,
-    grounded: false,
-    powerUps: new Set(),
-    jumpsUsed: 0,
-    maxJumps: 1,
-    frame: 0,
-    frameTimer: 0,
-    frameInterval: 5,
-  };
-
-  // Gravity & physics
-  const gravity = 0.6;
-  const jumpPower = -12;
-
-  // Platforms with fade in animation
-  let platforms = [];
-  function genPlatforms() {
-    platforms = [];
-    let yBase = height - 50;
-    platforms.push({x: 0, y: yBase, w: width, h: 20, alpha:0});
-    let px = 150;
-    while (px < width * 3) {
-      let py = yBase - (Math.random() * 100 + 40);
-      platforms.push({x: px, y: py, w: 100, h: 20, alpha:0});
-      px += 150 + Math.random() * 80;
-    }
-  }
-  genPlatforms();
-
-  // Win block (glowing pulse)
-  let winBlock = {x: platforms[platforms.length - 1].x + 120, y: height - 90, w: 50, h: 50, pulse: 0};
-
-  // Powerups types
-  const POWERUP_TYPES = ['SPD','DJM','HJP','SFL']; // Speed, Double Jump, High Jump, Slow Fall
-  const POWERUP_DESCS = {
-    SPD: 'Speed Boost',
-    DJM: 'Double Jump',
-    HJP: 'High Jump',
-    SFL: 'Slow Fall'
-  };
-
-  // Powerups (randomly on platforms) with pulse animation
-  let powerUps = [];
-  function genPowerUps() {
-    powerUps = [];
-    for (let i = 1; i < platforms.length - 1; i++) {
-      if (Math.random() < 0.5) {
-        powerUps.push({
-          x: platforms[i].x + platforms[i].w / 2 - 10,
-          y: platforms[i].y - 20,
-          collected: false,
-          type: POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)],
-          pulse: 0
-        });
-      }
-    }
-  }
-  genPowerUps();
-
-  // Controls
-  const keys = {left: false, right: false, jump: false};
+  const scoreboard = document.getElementById('scoreboard');
+  const modeToggle = document.getElementById('modeToggle');
   const leftBtn = document.getElementById('leftBtn');
   const rightBtn = document.getElementById('rightBtn');
   const jumpBtn = document.getElementById('jumpBtn');
 
-  function setupButton(btn, key) {
-    btn.addEventListener('touchstart', e => {
-      e.preventDefault();
-      keys[key] = true;
-      btn.classList.add('pressed');
-    });
-    btn.addEventListener('touchend', e => {
-      e.preventDefault();
-      keys[key] = false;
-      btn.classList.remove('pressed');
-    });
-    btn.addEventListener('mousedown', e => {
-      e.preventDefault();
-      keys[key] = true;
-      btn.classList.add('pressed');
-    });
-    btn.addEventListener('mouseup', e => {
-      e.preventDefault();
-      keys[key] = false;
-      btn.classList.remove('pressed');
-    });
-    btn.addEventListener('mouseleave', e => {
-      e.preventDefault();
-      keys[key] = false;
-      btn.classList.remove('pressed');
-    });
-  }
-  setupButton(leftBtn, 'left');
-  setupButton(rightBtn, 'right');
-  setupButton(jumpBtn, 'jump');
+  let width, height, scale;
 
-  // Reset player position and state
-  function resetPlayer() {
-    player.x = 100;
-    player.y = 100;
-    player.vx = 0;
-    player.vy = 0;
-    player.powerUps.clear();
-    player.maxJumps = 1;
-    player.jumpsUsed = 0;
-    updatePowerUpDisplay();
+  // Resize canvas full screen & handle DPI
+  function resize() {
+    scale = window.devicePixelRatio || 1;
+    width = window.innerWidth * scale;
+    height = window.innerHeight * scale;
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(scale, scale);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Mode: true = vertical jump only, false = horizontal movement allowed
+  let verticalMode = false;
+
+  // Player object
+  const player = {
+    x: window.innerWidth / 2,
+    y: window.innerHeight - 150,
+    vy: 0,
+    vx: 0,
+    width: 20,
+    height: 40,
+    speed: 5,
+    jumps: 0,
+    maxJumps: 2,
+    grounded: false,
+  };
+
+  // Game variables
+  const gravity = 0.6;
+  const jumpPower = -13;
+  const platformWidth = 110;
+  const platformHeight = 14;
+  const platformGap = 120;
+  const maxPlatforms = 10;
+
+  let platforms = [];
+  let powerUps = [];
+  let winBlock = null;
+
+  let score = 0;
+  let scrollOffset = 0;
+
+  // Controls state
+  let controls = {
+    left: false,
+    right: false,
+    jump: false,
+  };
+
+  // Helpers: create platform and power-ups
+  function createPlatform(y) {
+    const x = Math.random() * (window.innerWidth - platformWidth);
+    return { x, y, width: platformWidth, height: platformHeight };
   }
 
-  // Update power-up display
-  const powerUpDisplay = document.getElementById('powerUpDisplay');
-  function updatePowerUpDisplay() {
-    powerUpDisplay.innerHTML = '';
-    if (player.powerUps.size === 0) {
-      powerUpDisplay.textContent = 'Power-Ups: None';
-      return;
+  function createPowerUp(y) {
+    const x = Math.random() * (window.innerWidth - 30);
+    // Power-up types: extra jump, speed boost, score multiplier
+    const types = ['jump', 'speed', 'score'];
+    const type = types[Math.floor(Math.random() * types.length)];
+    return { x, y, width: 30, height: 30, type, active: false, timer: 0 };
+  }
+
+  function createWinBlock(y) {
+    const x = Math.random() * (window.innerWidth - 50);
+    return { x, y, width: 50, height: 20 };
+  }
+
+  // Initialize platforms, powerups, win block
+  function initLevel() {
+    platforms = [];
+    powerUps = [];
+    let y = window.innerHeight - platformHeight;
+    for(let i = 0; i < maxPlatforms; i++) {
+      platforms.push(createPlatform(y));
+      // Place power-ups on some platforms randomly
+      if (Math.random() < 0.3) {
+        powerUps.push(createPowerUp(y - 40));
+      }
+      y -= platformGap;
     }
-    player.powerUps.forEach(pu => {
-      const div = document.createElement('div');
-      div.className = 'powerUpIcon';
-      div.title = POWERUP_DESCS[pu];
-      div.textContent = pu;
-      powerUpDisplay.appendChild(div);
-    });
+    winBlock = createWinBlock(y - 100);
   }
 
-  // Draw stickman with limb animation
+  // Drawing functions
+
+  // Draw player as stickman with swinging limbs
   function drawPlayer() {
     const px = player.x;
     const py = player.y;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#AAF';
-    ctx.fillStyle = '#44F';
+    const t = performance.now() / 250;
+    const sway = Math.sin(t) * 5;
 
-    // Head
-    ctx.beginPath();
-    ctx.arc(px + player.w/2, py + 10, 8, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#e0e0ff';
+    ctx.fillStyle = '#44aaff';
 
     // Body
     ctx.beginPath();
-    ctx.moveTo(px + player.w/2, py + 18);
-    ctx.lineTo(px + player.w/2, py + 38);
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py - 40);
     ctx.stroke();
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(px, py - 50, 10, 0, Math.PI * 2);
+    ctx.fill();
 
     // Arms swinging
-    const swing = Math.sin(player.frame / 6) * 12;
     ctx.beginPath();
-    // Left arm
-    ctx.moveTo(px + player.w / 2, py + 22);
-    ctx.lineTo(px + player.w / 2 - 15, py + 22 + swing);
-    // Right arm
-    ctx.moveTo(px + player.w / 2, py + 22);
-    ctx.lineTo(px + player.w / 2 + 15, py + 22 - swing);
+    ctx.moveTo(px, py - 30);
+    ctx.lineTo(px - 15 + sway, py - 10);
+    ctx.moveTo(px, py - 30);
+    ctx.lineTo(px + 15 - sway, py - 10);
     ctx.stroke();
 
-    // Legs swinging
+    // Legs swinging opposite
     ctx.beginPath();
-    // Left leg
-    ctx.moveTo(px + player.w / 2, py + 38);
-    ctx.lineTo(px + player.w / 2 - 10, py + 38 + 20 + swing);
-    // Right leg
-    ctx.moveTo(px + player.w / 2, py + 38);
-    ctx.lineTo(px + player.w / 2 + 10, py + 38 + 20 - swing);
+    ctx.moveTo(px, py);
+    ctx.lineTo(px - 10 - sway, py + 30);
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + 10 + sway, py + 30);
     ctx.stroke();
   }
 
-  // Draw platforms with fade-in alpha and pulse for power-ups
+  // Draw platforms
   function drawPlatforms() {
+    ctx.fillStyle = '#55aaff';
     platforms.forEach(p => {
-      if (p.alpha < 1) p.alpha += 0.02;
-      ctx.fillStyle = `rgba(100, 150, 255, ${p.alpha})`;
-      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillRect(p.x, p.y - scrollOffset, p.width, p.height);
     });
   }
 
-  // Draw power-ups with pulsing effect
+  // Draw power-ups as colored squares with letter
   function drawPowerUps() {
     powerUps.forEach(pu => {
-      if (pu.collected) return;
-      pu.pulse += 0.1;
-      const pulseAlpha = 0.5 + Math.sin(pu.pulse) * 0.5;
-      ctx.fillStyle = `rgba(255, 215, 0, ${pulseAlpha})`;
-      ctx.beginPath();
-      ctx.arc(pu.x + 10, pu.y + 10, 12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#444';
-      ctx.font = 'bold 14px monospace';
+      const colors = {jump: '#ffaa00', speed: '#00aaff', score: '#aaff00'};
+      const letters = {jump: 'J', speed: 'S', score: '$'};
+      ctx.fillStyle = colors[pu.type];
+      ctx.fillRect(pu.x, pu.y - scrollOffset, pu.width, pu.height);
+      ctx.fillStyle = '#222';
+      ctx.font = 'bold 20px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(pu.type, pu.x + 10, pu.y + 10);
+      ctx.fillText(letters[pu.type], pu.x + pu.width/2, pu.y - scrollOffset + pu.height/2);
     });
   }
 
-  // Draw win block with glowing pulse
+  // Draw win block as gold rectangle
   function drawWinBlock() {
-    winBlock.pulse += 0.05;
-    const glow = 0.6 + Math.sin(winBlock.pulse) * 0.4;
-    ctx.fillStyle = `rgba(0, 255, 128, ${glow})`;
-    ctx.fillRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
-    ctx.strokeStyle = `rgba(0, 255, 128, ${glow})`;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
+    if(!winBlock) return;
+    ctx.fillStyle = '#ffdd00';
+    ctx.fillRect(winBlock.x, winBlock.y - scrollOffset, winBlock.width, winBlock.height);
+    ctx.fillStyle = '#333';
+    ctx.font = '16px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('WIN', winBlock.x + winBlock.width/2, winBlock.y - scrollOffset + winBlock.height/2);
   }
 
-  // Physics and collision
-  function updatePhysics() {
-    // Apply horizontal movement speed boost power-up
-    let speed = 4;
-    if (player.powerUps.has('SPD')) speed = 7;
-
-    if (keys.left) player.vx = -speed;
-    else if (keys.right) player.vx = speed;
-    else player.vx = 0;
-
-    // Gravity modification for Slow Fall power-up
-    let currentGravity = gravity;
-    if (player.powerUps.has('SFL')) currentGravity = 0.15;
-
-    player.vy += currentGravity;
-
-    // Jump handling
-    if (keys.jump) {
-      if (player.grounded || (player.powerUps.has('DJM') && player.jumpsUsed < player.maxJumps)) {
-        player.vy = jumpPower * (player.powerUps.has('HJP') ? 1.5 : 1);
-        player.grounded = false;
-        player.jumpsUsed++;
-        keys.jump = false; // prevent holding jump
-      }
+  // Update player physics & position
+  function updatePlayer() {
+    // Horizontal controls only in horizontal mode
+    if(!verticalMode) {
+      if(controls.left) player.vx = -player.speed;
+      else if(controls.right) player.vx = player.speed;
+      else player.vx = 0;
+      player.x += player.vx;
+      // Clamp player inside screen horizontally
+      if(player.x < 10) player.x = 10;
+      if(player.x > window.innerWidth - 10) player.x = window.innerWidth - 10;
+    } else {
+      // No horizontal movement in vertical mode
+      player.vx = 0;
     }
 
-    // Update player position
-    player.x += player.vx;
+    // Apply gravity
+    player.vy += gravity;
     player.y += player.vy;
 
-    // Prevent falling off bottom (reset)
-    if (player.y > height + 100) {
-      resetPlayer();
+    // Prevent falling below bottom (ground)
+    const groundY = window.innerHeight - 40;
+    if(player.y > groundY) {
+      player.y = groundY;
+      player.vy = 0;
+      player.grounded = true;
+      player.jumps = 0;
+    } else {
+      player.grounded = false;
     }
 
-    // Ground collision and platform collision
-    player.grounded = false;
-    for (const p of platforms) {
-      if (player.x + player.w > p.x && player.x < p.x + p.w) {
-        if (player.y + player.h > p.y && player.y + player.h < p.y + p.h + 20 && player.vy >= 0) {
-          player.y = p.y - player.h;
-          player.vy = 0;
-          player.grounded = true;
-          player.jumpsUsed = 0;
-        }
-      }
-    }
+    // Platform collision
+    platforms.forEach(p => {
+      const px = p.x;
+      const py = p.y - scrollOffset;
+      const pw = p.width;
+      const ph = p.height;
 
-    // Win condition
-    if (
-      player.x + player.w > winBlock.x &&
-      player.x < winBlock.x + winBlock.w &&
-      player.y + player.h > winBlock.y &&
-      player.y < winBlock.y + winBlock.h
-    ) {
-      alert('You Win! Restarting...');
-      resetGame();
-    }
-  }
-
-  // Check power-up collection
-  function checkPowerUpCollection() {
-    powerUps.forEach(pu => {
-      if (pu.collected) return;
-      if (
-        player.x + player.w > pu.x &&
-        player.x < pu.x + 20 &&
-        player.y + player.h > pu.y &&
-        player.y < pu.y + 20
+      // Check if player is falling and is above platform within X bounds
+      if(player.vy >= 0 &&
+        player.x + player.width/2 > px &&
+        player.x - player.width/2 < px + pw &&
+        player.y + player.height/2 >= py &&
+        player.y + player.height/2 <= py + ph
       ) {
-        pu.collected = true;
-        player.powerUps.add(pu.type);
-        if (pu.type === 'DJM') player.maxJumps = 2;
-        updatePowerUpDisplay();
+        player.y = py - player.height/2;
+        player.vy = 0;
+        player.grounded = true;
+        player.jumps = 0;
       }
     });
+
+    // PowerUp collection
+    powerUps.forEach((pu, i) => {
+      const px = pu.x;
+      const py = pu.y - scrollOffset;
+      if(player.x + player.width/2 > px &&
+         player.x - player.width/2 < px + pu.width &&
+         player.y + player.height/2 > py &&
+         player.y - player.height/2 < py + pu.height) {
+        applyPowerUp(pu.type);
+        powerUps.splice(i, 1);
+      }
+    });
+
+    // Win block collision
+    if(winBlock) {
+      const wx = winBlock.x;
+      const wy = winBlock.y - scrollOffset;
+      if(player.x + player.width/2 > wx &&
+         player.x - player.width/2 < wx + winBlock.width &&
+         player.y + player.height/2 > wy &&
+         player.y - player.height/2 < wy + winBlock.height) {
+        alert("You won! Reload to play again.");
+        resetGame();
+      }
+    }
   }
 
-  // Reset whole game state
+  // Apply power-up effects
+  function applyPowerUp(type) {
+    switch(type) {
+      case 'jump':
+        player.maxJumps = Math.min(player.maxJumps + 1, 5);
+        break;
+      case 'speed':
+        player.speed = Math.min(player.speed + 2, 15);
+        break;
+      case 'score':
+        score += 50;
+        break;
+    }
+    updateScore();
+  }
+
+  // Update score display
+  function updateScore() {
+    scoreboard.textContent = `Score: ${score}`;
+  }
+
+  // Reset game
   function resetGame() {
-    genPlatforms();
-    genPowerUps();
-    player.powerUps.clear();
-    player.maxJumps = 1;
-    player.jumpsUsed = 0;
-    updatePowerUpDisplay();
-    resetPlayer();
+    score = 0;
+    player.x = window.innerWidth / 2;
+    player.y = window.innerHeight - 150;
+    player.vx = 0;
+    player.vy = 0;
+    player.jumps = 0;
+    player.maxJumps = 2;
+    player.speed = 5;
+    scrollOffset = 0;
+    initLevel();
+    updateScore();
   }
 
   // Game loop
-  function loop() {
-    ctx.clearRect(0, 0, width, height);
+  function gameLoop() {
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
+    // Scroll screen up if player goes above half height
+    if(player.y < window.innerHeight / 2) {
+      scrollOffset += (window.innerHeight / 2 - player.y);
+      player.y = window.innerHeight / 2;
+    }
+
+    updatePlayer();
     drawPlatforms();
     drawPowerUps();
     drawWinBlock();
     drawPlayer();
 
-    updatePhysics();
-    checkPowerUpCollection();
-
-    // Animate player frames
-    player.frameTimer++;
-    if (player.frameTimer >= player.frameInterval) {
-      player.frame++;
-      player.frameTimer = 0;
-    }
-
-    requestAnimationFrame(loop);
+    requestAnimationFrame(gameLoop);
   }
 
+  // Jump function
+  function jump() {
+    if(player.jumps < player.maxJumps) {
+      player.vy = jumpPower;
+      player.jumps++;
+      player.grounded = false;
+    }
+  }
+
+  // Input handlers
+
+  leftBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    controls.left = true;
+  });
+  leftBtn.addEventListener('touchend', e => {
+    e.preventDefault();
+    controls.left = false;
+  });
+  rightBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    controls.right = true;
+  });
+  rightBtn.addEventListener('touchend', e => {
+    e.preventDefault();
+    controls.right = false;
+  });
+  jumpBtn.addEventListener('touchstart', e => {
+    e.preventDefault();
+    jump();
+  });
+
+  // Also support keyboard for testing
+  window.addEventListener('keydown', e => {
+    if(e.repeat) return;
+    if(e.key === 'ArrowLeft') controls.left = true;
+    if(e.key === 'ArrowRight') controls.right = true;
+    if(e.key === 'ArrowUp' || e.key === ' ') jump();
+  });
+  window.addEventListener('keyup', e => {
+    if(e.key === 'ArrowLeft') controls.left = false;
+    if(e.key === 'ArrowRight') controls.right = false;
+  });
+
+  // Mode toggle button handler
+  modeToggle.addEventListener('click', () => {
+    verticalMode = !verticalMode;
+    modeToggle.textContent = verticalMode ? 'Mode: Vertical Jump Only' : 'Mode: Horizontal';
+    // Hide left/right buttons in vertical mode
+    leftBtn.style.display = verticalMode ? 'none' : 'block';
+    rightBtn.style.display = verticalMode ? 'none' : 'block';
+  });
+
+  // Initialize game
   resetGame();
-  loop();
+  gameLoop();
 })();
 </script>
 
