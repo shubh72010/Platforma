@@ -2,315 +2,270 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>FullScreen Stick Figure Platformer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile Friendly Platformer</title>
 <style>
   html, body {
-    margin: 0; padding: 0; overflow: hidden;
-    height: 100%; width: 100%;
-    background: #000;
-    touch-action: none; /* Prevent default scrolling on mobile */
-  }
-  #game {
-    display: block;
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw;
-    height: 100vh;
+    margin: 0; padding: 0; overflow: hidden; height: 100%;
     background: #111;
-    z-index: 0;
+    touch-action: none; /* prevent scrolling */
   }
-  .control {
+  canvas {
+    display: block;
+    background: #222;
+  }
+  #leftBtn, #jumpBtn {
     position: fixed;
-    width: 120px;
-    height: 120px;
+    bottom: 20px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    background: rgba(0, 255, 0, 0.15);
-    backdrop-filter: contrast(150%) saturate(130%) brightness(120%);
-    box-shadow:
-      0 0 8px rgba(0, 255, 0, 0.3),
-      inset 0 0 20px rgba(0, 255, 0, 0.2);
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: contrast(1.5);
+    border: 2px solid rgba(255,255,255,0.2);
     user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   #leftBtn {
-    left: 15px;
-    bottom: 15px;
+    left: 20px;
   }
   #jumpBtn {
-    right: 15px;
-    bottom: 15px;
-  }
-  /* Interference pattern overlay */
-  .control::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    pointer-events: none;
-    background:
-      repeating-linear-gradient(45deg, rgba(0,255,0,0.05), rgba(0,255,0,0.05) 2px, transparent 3px, transparent 6px),
-      repeating-linear-gradient(-45deg, rgba(0,255,0,0.05), rgba(0,255,0,0.05) 2px, transparent 3px, transparent 6px);
-    animation: interferenceMove 4s linear infinite;
-  }
-  @keyframes interferenceMove {
-    0% { background-position: 0 0, 0 0; }
-    100% { background-position: 20px 20px, -20px -20px; }
+    right: 20px;
   }
   #winMessage {
     position: fixed;
-    top: 40%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 3em;
-    color: yellow;
-    text-shadow: 0 0 10px #ff0;
+    color: lime;
+    font-size: 48px;
+    font-family: monospace;
     display: none;
-    z-index: 20;
-    font-family: 'Arial Black', Arial, sans-serif;
+    pointer-events: none;
   }
 </style>
 </head>
 <body>
 
 <canvas id="game"></canvas>
-<div id="leftBtn" class="control">◀</div>
-<div id="jumpBtn" class="control">⬆</div>
+
+<div id="leftBtn"></div>
+<div id="jumpBtn"></div>
 <div id="winMessage">YOU WIN!</div>
 
 <script>
-// --- Same JS game code from before, just adjusted for full screen canvas ---
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const leftBtn = document.getElementById('leftBtn');
+  const jumpBtn = document.getElementById('jumpBtn');
+  const winMessage = document.getElementById('winMessage');
 
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const leftBtn = document.getElementById('leftBtn');
-const jumpBtn = document.getElementById('jumpBtn');
-const winMessage = document.getElementById('winMessage');
-
-let canvasWidth, canvasHeight;
-
-function resize() {
-  canvasWidth = window.innerWidth;
-  canvasHeight = window.innerHeight;
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
-}
-resize();
-window.addEventListener('resize', resize);
-
-const gravity = 0.8;
-const friction = 0.8;
-
-class Player {
-  constructor() {
-    this.width = 40 * (canvasWidth / 800);
-    this.height = 60 * (canvasHeight / 450);
-    this.x = 50 * (canvasWidth / 800);
-    this.y = canvasHeight - this.height - 10 * (canvasHeight / 450);
-    this.velX = 0;
-    this.velY = 0;
-    this.speed = 5 * (canvasWidth / 800);
-    this.jumping = false;
-    this.grounded = false;
-    this.step = 0;
+  // Resize canvas to full screen
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
   }
+  window.addEventListener('resize', resize);
+  resize();
 
-  update() {
-    if (keys['left']) {
-      if (this.velX > -this.speed) this.velX -= 1;
-      this.step += 0.2;
-    } else {
-      this.velX *= friction;
-      if (this.step > 0) this.step -= 0.1;
-      if (this.step < 0) this.step = 0;
-    }
+  // Player properties
+  const player = {
+    x: 50,
+    y: 0,
+    width: 20,
+    height: 40,
+    vy: 0,
+    gravity: 0.8,
+    jumpPower: -15,
+    speed: 3,
+    onGround: false,
+    frame: 0,
+    frameCount: 0,
+    frameMax: 10,
+    update() {
+      this.vy += this.gravity;
+      this.y += this.vy;
 
-    if (keys['jump']) {
-      if (!this.jumping && this.grounded) {
-        this.jumping = true;
-        this.grounded = false;
-        this.velY = -15 * (canvasHeight / 450);
+      // Simple floor collision
+      if (this.y + this.height > canvas.height) {
+        this.y = canvas.height - this.height;
+        this.vy = 0;
+        this.onGround = true;
+      } else {
+        this.onGround = false;
       }
+
+      // Left movement
+      if (keys.left) {
+        this.x -= this.speed;
+        if (this.x < 0) this.x = 0;
+      }
+
+      // Jump
+      if (keys.jump && this.onGround) {
+        this.vy = this.jumpPower;
+        this.onGround = false;
+      }
+
+      // Animate stick figure walking
+      this.frameCount++;
+      if (this.frameCount >= this.frameMax) {
+        this.frameCount = 0;
+        this.frame = (this.frame + 1) % 4;
+      }
+    },
+    draw() {
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+
+      // Body
+      ctx.beginPath();
+      ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.2);
+      ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.8);
+      ctx.stroke();
+
+      // Head
+      ctx.beginPath();
+      ctx.arc(this.x + this.width / 2, this.y + this.height * 0.1, this.width / 2, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Arms - simple walking animation with frame changes
+      ctx.beginPath();
+      if (this.frame === 0 || this.frame === 2) {
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.6);
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.6);
+      } else {
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.5);
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
+        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.7);
+      }
+      ctx.stroke();
+
+      // Legs - simple walking animation
+      ctx.beginPath();
+      if (this.frame === 0 || this.frame === 2) {
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height);
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height);
+      } else {
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height * 0.9);
+        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
+        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height * 0.9);
+      }
+      ctx.stroke();
     }
+  };
 
-    this.velY += gravity;
-
-    this.x += this.velX;
-    this.y += this.velY;
-
-    if (this.x < 0) this.x = 0;
-    if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
-    if (this.y + this.height > canvas.height) {
-      this.y = canvas.height - this.height;
-      this.jumping = false;
-      this.grounded = true;
-      this.velY = 0;
+  // Platform class
+  class Platform {
+    constructor(x, y, width, height, isGoal = false) {
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+      this.isGoal = isGoal;
+    }
+    draw() {
+      ctx.fillStyle = this.isGoal ? 'gold' : 'white';
+      ctx.fillRect(this.x, this.y, this.width, this.height);
     }
   }
 
-  draw() {
-    const centerX = this.x + this.width / 2;
-    const bottomY = this.y + this.height;
+  let platforms = [];
 
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#0f0';
-    ctx.lineWidth = 4 * (canvasWidth / 800);
-
-    const headRadius = 8 * (canvasWidth / 800);
-    ctx.beginPath();
-    ctx.arc(centerX, this.y + headRadius, headRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(centerX, this.y + 2 * headRadius);
-    ctx.lineTo(centerX, bottomY - 20 * (canvasHeight / 450));
-    ctx.stroke();
-
-    const swing = Math.sin(this.step) * 15;
-
-    ctx.beginPath();
-    if (this.jumping) {
-      ctx.moveTo(centerX, this.y + 2 * headRadius);
-      ctx.lineTo(centerX - 15 * (canvasWidth / 800), this.y + 2 * headRadius - 20 * (canvasHeight / 450));
-      ctx.moveTo(centerX, this.y + 2 * headRadius);
-      ctx.lineTo(centerX + 15 * (canvasWidth / 800), this.y + 2 * headRadius - 20 * (canvasHeight / 450));
-    } else {
-      ctx.moveTo(centerX, this.y + 2 * headRadius);
-      ctx.lineTo(centerX - 20 * (canvasWidth / 800), this.y + 2 * headRadius + swing * (canvasHeight / 450) * 0.5);
-      ctx.moveTo(centerX, this.y + 2 * headRadius);
-      ctx.lineTo(centerX + 20 * (canvasWidth / 800), this.y + 2 * headRadius - swing * (canvasHeight / 450) * 0.5);
+  // Generate random platforms
+  function generatePlatforms() {
+    platforms = [];
+    // Ground
+    platforms.push(new Platform(0, canvas.height - 40, canvas.width, 40));
+    // Random platforms
+    for (let i = 0; i < 6; i++) {
+      let w = 80 + Math.random() * 60;
+      let x = Math.random() * (canvas.width - w);
+      let y = canvas.height - 100 - i * 80 - Math.random() * 40;
+      platforms.push(new Platform(x, y, w, 20));
     }
-    ctx.stroke();
-
-    ctx.beginPath();
-    if (this.jumping) {
-      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
-      ctx.lineTo(centerX - 15 * (canvasWidth / 800), bottomY - 5 * (canvasHeight / 450));
-      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
-      ctx.lineTo(centerX + 15 * (canvasWidth / 800), bottomY - 5 * (canvasHeight / 450));
-    } else {
-      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
-      ctx.lineTo(centerX - 20 * (canvasWidth / 800), bottomY + swing * (canvasHeight / 450) * 0.5);
-      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
-      ctx.lineTo(centerX + 20 * (canvasWidth / 800), bottomY - swing * (canvasHeight / 450) * 0.5);
-    }
-    ctx.stroke();
-  }
-}
-
-class Platform {
-  constructor(x, y, w, h, isGoal = false) {
-    this.x = x;
-    this.y = y;
-    this.width = w;
-    this.height = h;
-    this.isGoal = isGoal;
+    // Goal platform - last one
+    let lastPlat = platforms[platforms.length - 1];
+    platforms.push(new Platform(lastPlat.x + 50, lastPlat.y - 80, 80, 20, true));
   }
 
-  draw() {
-    ctx.fillStyle = this.isGoal ? '#ff0' : '#555';
-    ctx.fillRect(this.x, this.y, this.width, this.height);
-  }
-}
+  let keys = { left: false, jump: false };
 
-const player = new Player();
-let platforms = [];
-let gameWon = false;
+  function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-const keys = {};
+    player.update();
 
-function generatePlatforms() {
-  platforms = [];
-  platforms.push(new Platform(0, canvas.height - 10, canvas.width, 10));
-  let xPos = 100 * (canvasWidth / 800);
-  while (xPos < canvasWidth - 150) {
-    const width = (50 + Math.random() * 70) * (canvasWidth / 800);
-    const yPos = 150 * (canvasHeight / 450) + Math.random() * (canvasHeight - 200 * (canvasHeight / 450));
-    platforms.push(new Platform(xPos, yPos, width, 10 * (canvasHeight / 450)));
-    xPos += width + (80 + Math.random() * 70) * (canvasWidth / 800);
-  }
-  platforms.push(new Platform(canvasWidth - 120 * (canvasWidth / 800), canvasHeight - 60 * (canvasHeight / 450), 100 * (canvasWidth / 800), 15 * (canvasHeight / 450), true));
-}
-
-function collisionCheck(rect1, rect2) {
-  return (
-    rect1.x < rect2.x + rect2.width &&
-    rect1.x + rect1.width > rect2.x &&
-    rect1.y < rect2.y + rect2.height &&
-    rect1.height + rect1.y > rect2.y
-  );
-}
-
-function update() {
-  if (gameWon) return;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  player.grounded = false;
-  for (let plat of platforms) {
-    if (
-      collisionCheck(
-        { x: player.x, y: player.y + player.velY, width: player.width, height: player.height },
-        plat
-      )
-    ) {
-      if (player.velY > 0) {
+    // Collision with platforms
+    player.onGround = false;
+    for (let plat of platforms) {
+      // AABB collision
+      if (
+        player.x + player.width > plat.x &&
+        player.x < plat.x + plat.width &&
+        player.y + player.height > plat.y &&
+        player.y + player.height < plat.y + plat.height + player.vy
+      ) {
         player.y = plat.y - player.height;
-        player.velY = 0;
-        player.jumping = false;
-        player.grounded = true;
+        player.vy = 0;
+        player.onGround = true;
 
         if (plat.isGoal) {
-          gameWon = true;
-          winMessage.style.display = winMessage.style.display = 'block';
+          winMessage.style.display = 'block';
+          return; // stop updating after win
         }
       }
     }
+
+    // Draw platforms
+    for (let plat of platforms) {
+      plat.draw();
+    }
+
+    // Draw player
+    player.draw();
+
+    requestAnimationFrame(update);
   }
 
-  player.update();
+  // Touch controls setup
+  leftBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    keys.left = true;
+  });
+  leftBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    keys.left = false;
+  });
 
-  // Draw platforms
-  for (let plat of platforms) {
-    plat.draw();
-  }
+  jumpBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    keys.jump = true;
+  });
+  jumpBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    keys.jump = false;
+  });
 
-  // Draw player
-  player.draw();
+  // Keyboard controls for testing
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') keys.left = true;
+    if (e.key === ' ') keys.jump = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft') keys.left = false;
+    if (e.key === ' ') keys.jump = false;
+  });
 
-  requestAnimationFrame(update);
-}
+  generatePlatforms();
+  update();
+</script>
 
-// Input handling
-leftBtn.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  keys['left'] = true;
-});
-leftBtn.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  keys['left'] = false;
-});
-jumpBtn.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  keys['jump'] = true;
-});
-jumpBtn.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  keys['jump'] = false;
-});
-
-// Also allow keyboard for desktop testing
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') keys['left'] = true;
-  if (e.key === ' ') keys['jump'] = true;
-});
-window.addEventListener('keyup', (e) => {
-  if (e.key === 'ArrowLeft') keys['left'] = false;
-  if (e.key === ' ') keys['jump'] = false;
-});
-
-generatePlatforms();
-update();
+</body>
+</html>
