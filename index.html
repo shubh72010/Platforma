@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stickman Platformer</title>
   <style>
     html, body {
@@ -13,157 +12,203 @@
     }
     canvas {
       display: block;
-      background: #333;
+      background: #111;
     }
-    .btn {
+    .controls {
       position: fixed;
       bottom: 20px;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      border: none;
-      font-size: 20px;
-      font-weight: bold;
-      color: white;
-      background: #555;
-      opacity: 0.8;
-      z-index: 10;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      pointer-events: none;
     }
-    #left { left: 20px; }
-    #right { left: 100px; }
-    #jump { right: 20px; background: #888; }
+    .circle-btn {
+      width: 70px;
+      height: 70px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      color: white;
+      user-select: none;
+    }
+    .hud {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: white;
+      font-family: sans-serif;
+      font-size: 20px;
+    }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <button id="left" class="btn">&#9664;</button>
-  <button id="right" class="btn">&#9654;</button>
-  <button id="jump" class="btn">&#8679;</button>
+<canvas id="game"></canvas>
+<div class="controls">
+  <div style="display: flex; gap: 10px;">
+    <div class="circle-btn" id="leftBtn">&#9664;</div>
+    <div class="circle-btn" id="rightBtn">&#9654;</div>
+  </div>
+  <div class="circle-btn" id="jumpBtn">&#x21E7;</div>
+</div>
+<div class="hud" id="powerUpText">Power-Ups: None</div>
 
-  <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    let W = canvas.width = window.innerWidth;
-    let H = canvas.height = window.innerHeight;
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let width = window.innerWidth;
+let height = window.innerHeight;
+canvas.width = width;
+canvas.height = height;
 
-    let gravity = 0.6;
-    let keys = { left: false, right: false, jump: false };
+let gravity = 1.2;
+let platforms = [];
+let powerUps = [];
+let winBlock = {x: 0, y: 0, w: 60, h: 30};
 
-    const player = {
-      x: 50, y: H - 150,
-      w: 30, h: 50,
-      vx: 0, vy: 0,
-      grounded: false,
-      draw() {
-        ctx.fillStyle = "#0f0";
-        ctx.beginPath();
-        // Head
-        ctx.arc(this.x + this.w/2, this.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-        // Body
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.w/2, this.y + 10);
-        ctx.lineTo(this.x + this.w/2, this.y + 35);
-        // Arms
-        ctx.moveTo(this.x + this.w/2, this.y + 15);
-        ctx.lineTo(this.x + this.w/2 - 10, this.y + 25);
-        ctx.moveTo(this.x + this.w/2, this.y + 15);
-        ctx.lineTo(this.x + this.w/2 + 10, this.y + 25);
-        // Legs
-        ctx.moveTo(this.x + this.w/2, this.y + 35);
-        ctx.lineTo(this.x + this.w/2 - 10, this.y + 50);
-        ctx.moveTo(this.x + this.w/2, this.y + 35);
-        ctx.lineTo(this.x + this.w/2 + 10, this.y + 50);
-        ctx.strokeStyle = "#0f0";
-        ctx.lineWidth = 3;
-        ctx.stroke();
-      },
-      update() {
-        if (keys.left) this.vx = -3;
-        else if (keys.right) this.vx = 3;
-        else this.vx = 0;
+let keys = {
+  left: false,
+  right: false,
+  up: false
+};
 
-        this.vy += gravity;
-        this.x += this.vx;
-        this.y += this.vy;
+const player = {
+  x: 100,
+  y: 100,
+  w: 40,
+  h: 40,
+  vx: 0,
+  vy: 0,
+  grounded: false,
+  powerUps: []
+};
 
-        this.grounded = false;
-        for (let plat of platforms) {
-          if (
-            this.x + this.w > plat.x && this.x < plat.x + plat.w &&
-            this.y + this.h >= plat.y && this.y + this.h <= plat.y + plat.h &&
-            this.vy >= 0
-          ) {
-            this.y = plat.y - this.h;
-            this.vy = 0;
-            this.grounded = true;
-          }
-        }
+function generateLevel() {
+  platforms = [];
+  powerUps = [];
 
-        // Win zone
-        if (
-          this.x + this.w > goal.x && this.x < goal.x + goal.w &&
-          this.y + this.h > goal.y && this.y < goal.y + goal.h
-        ) {
-          alert("You win!");
-          location.reload();
-        }
-
-        // Fall
-        if (this.y > H) {
-          alert("You fell!");
-          location.reload();
-        }
-      }
-    };
-
-    const platforms = [];
-    for (let i = 0; i < 8; i++) {
-      let px = 100 + i * 150;
-      let py = H - (100 + (i * 70));
-      platforms.push({ x: px, y: py, w: 100, h: 10 });
+  for (let i = 0; i < 20; i++) {
+    let x = i * 200 + Math.random() * 100;
+    let y = height - (Math.random() * 200 + 100);
+    platforms.push({x, y, w: 150, h: 20});
+    if (Math.random() < 0.3) {
+      powerUps.push({x: x + 50, y: y - 30, collected: false});
     }
+  }
 
-    const goal = { x: platforms[platforms.length - 1].x + 50, y: platforms[platforms.length - 1].y - 40, w: 40, h: 40 };
+  winBlock.x = platforms[platforms.length - 1].x + 100;
+  winBlock.y = platforms[platforms.length - 1].y - 40;
+}
+generateLevel();
 
-    function drawPlatforms() {
-      ctx.fillStyle = "#888";
-      platforms.forEach(p => {
-        ctx.fillRect(p.x, p.y, p.w, p.h);
-      });
+function update() {
+  player.vy += gravity;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  player.grounded = false;
+  for (let plat of platforms) {
+    if (player.x + player.w > plat.x && player.x < plat.x + plat.w &&
+        player.y + player.h > plat.y && player.y + player.h < plat.y + plat.h) {
+      player.y = plat.y - player.h;
+      player.vy = 0;
+      player.grounded = true;
     }
+  }
 
-    function drawGoal() {
-      ctx.fillStyle = "#ff0";
-      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+  for (let p of powerUps) {
+    if (!p.collected &&
+        player.x < p.x + 20 && player.x + player.w > p.x &&
+        player.y < p.y + 20 && player.y + player.h > p.y) {
+      p.collected = true;
+      player.powerUps.push("Speed");
+      document.getElementById("powerUpText").innerText = "Power-Ups: Speed";
     }
+  }
 
-    function gameLoop() {
-      ctx.clearRect(0, 0, W, H);
-      drawPlatforms();
-      drawGoal();
-      player.update();
-      player.draw();
-      requestAnimationFrame(gameLoop);
-    }
+  if (player.x + player.w > winBlock.x && player.x < winBlock.x + winBlock.w &&
+      player.y + player.h > winBlock.y && player.y < winBlock.y + winBlock.h) {
+    alert("YOU WIN!");
+    location.reload();
+  }
 
-    gameLoop();
+  // Move boundaries
+  if (keys.left) player.vx = -5;
+  else if (keys.right) player.vx = player.powerUps.includes("Speed") ? 8 : 5;
+  else player.vx = 0;
 
-    document.getElementById("left").addEventListener("touchstart", () => keys.left = true);
-    document.getElementById("left").addEventListener("touchend", () => keys.left = false);
-    document.getElementById("right").addEventListener("touchstart", () => keys.right = true);
-    document.getElementById("right").addEventListener("touchend", () => keys.right = false);
-    document.getElementById("jump").addEventListener("touchstart", () => {
-      if (player.grounded) {
-        player.vy = -12;
-        player.grounded = false;
-      }
-    });
+  requestAnimationFrame(update);
+  draw();
+}
 
-    window.addEventListener("resize", () => {
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-    });
-  </script>
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+
+  // Draw platforms
+  ctx.fillStyle = "#444";
+  for (let plat of platforms) {
+    ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+  }
+
+  // Draw power-ups
+  ctx.fillStyle = "yellow";
+  for (let p of powerUps) {
+    if (!p.collected) ctx.fillRect(p.x, p.y, 20, 20);
+  }
+
+  // Draw win block
+  ctx.fillStyle = "lime";
+  ctx.fillRect(winBlock.x, winBlock.y, winBlock.w, winBlock.h);
+
+  // Draw player (animated stickman)
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 3;
+  let cx = player.x + player.w / 2;
+  let cy = player.y + player.h / 2;
+
+  // Head
+  ctx.beginPath();
+  ctx.arc(cx, player.y + 8, 8, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Body
+  ctx.beginPath();
+  ctx.moveTo(cx, player.y + 16);
+  ctx.lineTo(cx, player.y + 30);
+  ctx.stroke();
+
+  // Arms
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, player.y + 20);
+  ctx.lineTo(cx + 10, player.y + 20);
+  ctx.stroke();
+
+  // Legs
+  ctx.beginPath();
+  ctx.moveTo(cx, player.y + 30);
+  ctx.lineTo(cx - 10, player.y + 40);
+  ctx.moveTo(cx, player.y + 30);
+  ctx.lineTo(cx + 10, player.y + 40);
+  ctx.stroke();
+}
+
+document.getElementById("leftBtn").addEventListener("touchstart", () => keys.left = true);
+document.getElementById("leftBtn").addEventListener("touchend", () => keys.left = false);
+document.getElementById("rightBtn").addEventListener("touchstart", () => keys.right = true);
+document.getElementById("rightBtn").addEventListener("touchend", () => keys.right = false);
+document.getElementById("jumpBtn").addEventListener("touchstart", () => {
+  if (player.grounded) {
+    player.vy = -18;
+    player.grounded = false;
+  }
+});
+
+update();
+</script>
 </body>
 </html>
