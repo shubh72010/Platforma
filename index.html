@@ -3,28 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mobile Friendly Platformer</title>
+<title>Platformer with Buttons</title>
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden; height: 100%;
     background: #111;
-    touch-action: none; /* prevent scrolling */
+    touch-action: none;
+    font-family: monospace;
   }
   canvas {
     display: block;
     background: #222;
   }
-  #leftBtn, #jumpBtn {
+  button {
     position: fixed;
     bottom: 20px;
     width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.1);
-    backdrop-filter: contrast(1.5);
-    border: 2px solid rgba(255,255,255,0.2);
+    height: 60px;
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    background: #444;
+    border: 2px solid #888;
+    border-radius: 10px;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
   }
   #leftBtn {
     left: 20px;
@@ -48,8 +52,8 @@
 
 <canvas id="game"></canvas>
 
-<div id="leftBtn"></div>
-<div id="jumpBtn"></div>
+<button id="leftBtn">LEFT</button>
+<button id="jumpBtn">JUMP</button>
 <div id="winMessage">YOU WIN!</div>
 
 <script>
@@ -59,7 +63,6 @@
   const jumpBtn = document.getElementById('jumpBtn');
   const winMessage = document.getElementById('winMessage');
 
-  // Resize canvas to full screen
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -67,7 +70,6 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // Player properties
   const player = {
     x: 50,
     y: 0,
@@ -85,7 +87,6 @@
       this.vy += this.gravity;
       this.y += this.vy;
 
-      // Simple floor collision
       if (this.y + this.height > canvas.height) {
         this.y = canvas.height - this.height;
         this.vy = 0;
@@ -94,19 +95,16 @@
         this.onGround = false;
       }
 
-      // Left movement
       if (keys.left) {
         this.x -= this.speed;
         if (this.x < 0) this.x = 0;
       }
 
-      // Jump
       if (keys.jump && this.onGround) {
         this.vy = this.jumpPower;
         this.onGround = false;
       }
 
-      // Animate stick figure walking
       this.frameCount++;
       if (this.frameCount >= this.frameMax) {
         this.frameCount = 0;
@@ -118,18 +116,15 @@
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
 
-      // Body
       ctx.beginPath();
       ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.2);
       ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.8);
       ctx.stroke();
 
-      // Head
       ctx.beginPath();
       ctx.arc(this.x + this.width / 2, this.y + this.height * 0.1, this.width / 2, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Arms - simple walking animation with frame changes
       ctx.beginPath();
       if (this.frame === 0 || this.frame === 2) {
         ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
@@ -144,7 +139,6 @@
       }
       ctx.stroke();
 
-      // Legs - simple walking animation
       ctx.beginPath();
       if (this.frame === 0 || this.frame === 2) {
         ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
@@ -161,7 +155,6 @@
     }
   };
 
-  // Platform class
   class Platform {
     constructor(x, y, width, height, isGoal = false) {
       this.x = x;
@@ -178,19 +171,15 @@
 
   let platforms = [];
 
-  // Generate random platforms
   function generatePlatforms() {
     platforms = [];
-    // Ground
     platforms.push(new Platform(0, canvas.height - 40, canvas.width, 40));
-    // Random platforms
     for (let i = 0; i < 6; i++) {
       let w = 80 + Math.random() * 60;
       let x = Math.random() * (canvas.width - w);
       let y = canvas.height - 100 - i * 80 - Math.random() * 40;
       platforms.push(new Platform(x, y, w, 20));
     }
-    // Goal platform - last one
     let lastPlat = platforms[platforms.length - 1];
     platforms.push(new Platform(lastPlat.x + 50, lastPlat.y - 80, 80, 20, true));
   }
@@ -202,10 +191,8 @@
 
     player.update();
 
-    // Collision with platforms
     player.onGround = false;
     for (let plat of platforms) {
-      // AABB collision
       if (
         player.x + player.width > plat.x &&
         player.x < plat.x + plat.width &&
@@ -218,42 +205,53 @@
 
         if (plat.isGoal) {
           winMessage.style.display = 'block';
-          return; // stop updating after win
+          return;
         }
       }
     }
 
-    // Draw platforms
     for (let plat of platforms) {
       plat.draw();
     }
 
-    // Draw player
     player.draw();
 
     requestAnimationFrame(update);
   }
 
-  // Touch controls setup
+  // Buttons touch/mouse handlers
+  function buttonDown(key) {
+    keys[key] = true;
+  }
+  function buttonUp(key) {
+    keys[key] = false;
+  }
+
   leftBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    keys.left = true;
+    buttonDown('left');
   });
   leftBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
-    keys.left = false;
+    buttonUp('left');
   });
+  leftBtn.addEventListener('mousedown', () => buttonDown('left'));
+  leftBtn.addEventListener('mouseup', () => buttonUp('left'));
+  leftBtn.addEventListener('mouseleave', () => buttonUp('left'));
 
   jumpBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    keys.jump = true;
+    buttonDown('jump');
   });
   jumpBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
-    keys.jump = false;
+    buttonUp('jump');
   });
+  jumpBtn.addEventListener('mousedown', () => buttonDown('jump'));
+  jumpBtn.addEventListener('mouseup', () => buttonUp('jump'));
+  jumpBtn.addEventListener('mouseleave', () => buttonUp('jump'));
 
-  // Keyboard controls for testing
+  // Keyboard for testing
   window.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') keys.left = true;
     if (e.key === ' ') keys.jump = true;
