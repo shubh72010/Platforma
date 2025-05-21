@@ -1,300 +1,228 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Platformer with 3 Controls</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; overflow: hidden; height: 100%;
-    background: #111;
-    touch-action: none;
-    font-family: monospace;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  canvas {
-    display: block;
-    background: #222;
-    width: 100vw;
-    height: 100vh;
-  }
-  button {
-    position: fixed;
-    bottom: 30px;
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    font-size: 24px;
-    font-weight: bold;
-    color: white;
-    background: rgba(68, 68, 68, 0.8);
-    border: 3px solid #888;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-  #leftBtn {
-    left: 30px;
-  }
-  #rightBtn {
-    left: 120px;
-  }
-  #jumpBtn {
-    right: 30px;
-  }
-  #winMessage {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    color: lime;
-    font-size: 48px;
-    font-family: monospace;
-    display: none;
-    pointer-events: none;
-    user-select: none;
-    z-index: 1001;
-  }
-</style>
+  <meta charset="utf-8">
+  <title>Full Stickman Platformer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #111;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+    .controls {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .button {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid white;
+      border-radius: 50%;
+      pointer-events: auto;
+      touch-action: none;
+    }
+    #left { bottom: 20px; left: 20px; }
+    #right { bottom: 20px; left: 100px; }
+    #jump { bottom: 20px; right: 20px; }
+  </style>
 </head>
 <body>
-<canvas id="game"></canvas>
+  <canvas id="game"></canvas>
+  <div class="controls">
+    <div class="button" id="left"></div>
+    <div class="button" id="right"></div>
+    <div class="button" id="jump"></div>
+  </div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
 
-<button id="leftBtn">←</button>
-<button id="rightBtn">→</button>
-<button id="jumpBtn">↑</button>
+    // Controls
+    let keys = { left: false, right: false, jump: false };
+    document.getElementById('left').ontouchstart = () => keys.left = true;
+    document.getElementById('left').ontouchend = () => keys.left = false;
+    document.getElementById('right').ontouchstart = () => keys.right = true;
+    document.getElementById('right').ontouchend = () => keys.right = false;
+    document.getElementById('jump').ontouchstart = () => keys.jump = true;
+    document.getElementById('jump').ontouchend = () => keys.jump = false;
 
-<div id="winMessage">YOU WIN!</div>
+    // Sounds (stub, replace with actual file URLs)
+    const jumpSound = new Audio('jump.mp3');
+    const winSound = new Audio('win.mp3');
+    const hurtSound = new Audio('hurt.mp3');
 
-<script>
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const leftBtn = document.getElementById('leftBtn');
-  const rightBtn = document.getElementById('rightBtn');
-  const jumpBtn = document.getElementById('jumpBtn');
-  const winMessage = document.getElementById('winMessage');
-
-  function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  const player = {
-    x: 50,
-    y: 0,
-    width: 20,
-    height: 40,
-    vy: 0,
-    gravity: 0.8,
-    jumpPower: -15,
-    speed: 3,
-    onGround: false,
-    frame: 0,
-    frameCount: 0,
-    frameMax: 10,
-    update() {
-      this.vy += this.gravity;
-      this.y += this.vy;
-
-      if (this.y + this.height > canvas.height) {
-        this.y = canvas.height - this.height;
+    class Player {
+      constructor() {
+        this.reset();
+      }
+      reset() {
+        this.x = 50;
+        this.y = canvas.height - 100;
+        this.w = 20;
+        this.h = 50;
+        this.vx = 0;
         this.vy = 0;
-        this.onGround = true;
-      } else {
         this.onGround = false;
+        this.score = 0;
       }
-
-      if (keys.left) {
-        this.x -= this.speed;
-        if (this.x < 0) this.x = 0;
+      draw() {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        // Head
+        ctx.beginPath();
+        ctx.arc(this.x + this.w/2, this.y + 10, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        // Body
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.w/2, this.y + 20);
+        ctx.lineTo(this.x + this.w/2, this.y + 40);
+        ctx.stroke();
+        // Arms
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.w/2, this.y + 25);
+        ctx.lineTo(this.x - 5, this.y + 35);
+        ctx.moveTo(this.x + this.w/2, this.y + 25);
+        ctx.lineTo(this.x + this.w + 5, this.y + 35);
+        ctx.stroke();
+        // Legs
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.w/2, this.y + 40);
+        ctx.lineTo(this.x, this.y + this.h);
+        ctx.moveTo(this.x + this.w/2, this.y + 40);
+        ctx.lineTo(this.x + this.w, this.y + this.h);
+        ctx.stroke();
       }
-      if (keys.right) {
-        this.x += this.speed;
-        if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
-      }
+      update() {
+        if (keys.left) this.vx = -3;
+        else if (keys.right) this.vx = 3;
+        else this.vx = 0;
 
-      this.frameCount++;
-      if (this.frameCount >= this.frameMax) {
-        this.frameCount = 0;
-        this.frame = (this.frame + 1) % 4;
-      }
-    },
-    draw() {
-      ctx.strokeStyle = 'white';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
+        if (keys.jump && this.onGround) {
+          this.vy = -12;
+          this.onGround = false;
+          jumpSound.play();
+        }
 
-      // Head
-      ctx.beginPath();
-      ctx.arc(this.x + this.width / 2, this.y + this.height * 0.1, this.width / 2, 0, Math.PI * 2);
-      ctx.stroke();
+        this.vy += 0.6;
+        this.x += this.vx;
+        this.y += this.vy;
 
-      // Body
-      ctx.beginPath();
-      ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.2);
-      ctx.lineTo(this.x + this.width / 2, this.y + this.height * 0.8);
-      ctx.stroke();
+        this.onGround = false;
+        for (let p of platforms) {
+          if (this.x < p.x + p.w && this.x + this.w > p.x &&
+              this.y + this.h < p.y + 10 && this.y + this.h + this.vy >= p.y) {
+            this.y = p.y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+          }
+        }
 
-      // Arms
-      ctx.beginPath();
-      if (this.frame === 0 || this.frame === 2) {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.6);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.6);
-      } else {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 - 15, this.y + this.height * 0.5);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.4);
-        ctx.lineTo(this.x + this.width / 2 + 15, this.y + this.height * 0.7);
-      }
-      ctx.stroke();
+        // Collision with enemies
+        for (let e of enemies) {
+          if (this.x < e.x + e.w && this.x + this.w > e.x &&
+              this.y < e.y + e.h && this.y + this.h > e.y) {
+            hurtSound.play();
+            this.reset();
+          }
+        }
 
-      // Legs
-      ctx.beginPath();
-      if (this.frame === 0 || this.frame === 2) {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height);
-      } else {
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 - 10, this.y + this.height * 0.9);
-        ctx.moveTo(this.x + this.width / 2, this.y + this.height * 0.8);
-        ctx.lineTo(this.x + this.width / 2 + 10, this.y + this.height * 0.9);
-      }
-      ctx.stroke();
-    }
-  };
+        if (this.y > canvas.height) this.reset();
 
-  class Platform {
-    constructor(x, y, width, height, isGoal = false) {
-      this.x = x;
-      this.y = y;
-      this.width = width;
-      this.height = height;
-      this.isGoal = isGoal;
-    }
-    draw() {
-      ctx.fillStyle = this.isGoal ? 'gold' : 'white';
-      ctx.fillRect(this.x, this.y, this.width, this.height);
-    }
-  }
-
-  let platforms = [];
-
-  function generatePlatforms() {
-    platforms = [];
-    platforms.push(new Platform(0, canvas.height - 40, canvas.width, 40));
-    for (let i = 0; i < 6; i++) {
-      let w = 80 + Math.random() * 60;
-      let x = Math.random() * (canvas.width - w);
-      let y = canvas.height - 100 - i * 80 - Math.random() * 40;
-      platforms.push(new Platform(x, y, w, 20));
-    }
-    let lastPlat = platforms[platforms.length - 1];
-    platforms.push(new Platform(lastPlat.x + 50, lastPlat.y - 80, 80, 20, true));
-  }
-
-  let keys = { left: false, right: false };
-  let jumpPressed = false;
-
-  function playerJump() {
-    if (player.onGround) {
-      player.vy = player.jumpPower;
-      player.onGround = false;
-    }
-  }
-
-  // Left move button handlers
-  leftBtn.addEventListener('touchstart', e => { e.preventDefault(); keys.left = true; });
-  leftBtn.addEventListener('touchend', e => { e.preventDefault(); keys.left = false; });
-  leftBtn.addEventListener('mousedown', e => { e.preventDefault(); keys.left = true; });
-  leftBtn.addEventListener('mouseup', e => { e.preventDefault(); keys.left = false; });
-  leftBtn.addEventListener('mouseleave', e => { e.preventDefault(); keys.left = false; });
-
-  // Right move button handlers
-  rightBtn.addEventListener('touchstart', e => { e.preventDefault(); keys.right = true; });
-  rightBtn.addEventListener('touchend', e => { e.preventDefault(); keys.right = false; });
-  rightBtn.addEventListener('mousedown', e => { e.preventDefault(); keys.right = true; });
-  rightBtn.addEventListener('mouseup', e => { e.preventDefault(); keys.right = false; });
-  rightBtn.addEventListener('mouseleave', e => { e.preventDefault(); keys.right = false; });
-
-  // Jump button handlers
-  jumpBtn.addEventListener('touchstart', e => {
-    e.preventDefault();
-if (!jumpPressed) {
-      playerJump();
-      jumpPressed = true;
-    }
-  });
-  jumpBtn.addEventListener('touchend', e => {
-    e.preventDefault();
-    jumpPressed = false;
-  });
-  jumpBtn.addEventListener('mousedown', e => {
-    e.preventDefault();
-    if (!jumpPressed) {
-      playerJump();
-      jumpPressed = true;
-    }
-  });
-  jumpBtn.addEventListener('mouseup', e => {
-    e.preventDefault();
-    jumpPressed = false;
-  });
-  jumpBtn.addEventListener('mouseleave', e => {
-    e.preventDefault();
-    jumpPressed = false;
-  });
-
-  function checkCollision(player, platform) {
-    return (
-      player.x < platform.x + platform.width &&
-      player.x + player.width > platform.x &&
-      player.y + player.height > platform.y &&
-      player.y + player.height < platform.y + platform.height + 10 && 
-      player.vy >= 0
-    );
-  }
-
-  function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Update player position and velocity
-    player.update();
-
-    // Check collisions with platforms
-    player.onGround = false;
-    for (let p of platforms) {
-      if (checkCollision(player, p)) {
-        player.y = p.y - player.height;
-        player.vy = 0;
-        player.onGround = true;
-
-        if (p.isGoal) {
-          winMessage.style.display = 'block';
+        // Win
+        if (this.x < goal.x + goal.w && this.x + this.w > goal.x &&
+            this.y < goal.y + goal.h && this.y + this.h > goal.y) {
+          winSound.play();
+          this.score++;
+          generateLevel();
         }
       }
     }
 
-    // Draw platforms
-    platforms.forEach(p => p.draw());
+    class Platform {
+      constructor(x, y, w) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = 10;
+      }
+      draw() {
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+      }
+    }
 
-    // Draw player
-    player.draw();
+    class Enemy {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.w = 20;
+        this.h = 20;
+        this.dir = 1;
+      }
+      draw() {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+      }
+      update() {
+        this.x += this.dir * 2;
+        if (this.x < 0 || this.x + this.w > canvas.width) this.dir *= -1;
+      }
+    }
 
-    requestAnimationFrame(gameLoop);
-  }
+    const player = new Player();
+    let platforms = [];
+    let enemies = [];
+    let goal = {};
 
-  generatePlatforms();
-  gameLoop();
-</script>
+    function generateLevel() {
+      platforms = [];
+      enemies = [];
+      let base = canvas.height - 20;
+      platforms.push(new Platform(0, base, canvas.width));
+      for (let i = 1; i <= 5; i++) {
+        let px = Math.random() * (canvas.width - 100);
+        let py = base - i * 100;
+        platforms.push(new Platform(px, py, 100));
+        if (Math.random() < 0.5) enemies.push(new Enemy(px + 30, py - 20));
+      }
+      goal = { x: platforms[platforms.length - 1].x + 35, y: platforms[platforms.length - 1].y - 30, w: 30, h: 30 };
+      player.reset();
+    }
+
+    generateLevel();
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      player.update();
+      player.draw();
+      platforms.forEach(p => p.draw());
+      enemies.forEach(e => { e.update(); e.draw(); });
+
+      // Goal
+      ctx.fillStyle = 'gold';
+      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+
+      // Score
+      ctx.fillStyle = 'white';
+      ctx.font = '20px sans-serif';
+      ctx.fillText('Score: ' + player.score, 10, 30);
+
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
 </body>
 </html>
