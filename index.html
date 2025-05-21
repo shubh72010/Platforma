@@ -1,228 +1,169 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Full Stickman Platformer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stickman Platformer</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: #111;
+      background: #222;
     }
     canvas {
       display: block;
-      background: #222;
+      background: #333;
     }
-    .controls {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    .button {
-      position: absolute;
+    .btn {
+      position: fixed;
+      bottom: 20px;
       width: 60px;
       height: 60px;
-      background: rgba(255,255,255,0.2);
-      border: 2px solid white;
       border-radius: 50%;
-      pointer-events: auto;
-      touch-action: none;
+      border: none;
+      font-size: 20px;
+      font-weight: bold;
+      color: white;
+      background: #555;
+      opacity: 0.8;
+      z-index: 10;
     }
-    #left { bottom: 20px; left: 20px; }
-    #right { bottom: 20px; left: 100px; }
-    #jump { bottom: 20px; right: 20px; }
+    #left { left: 20px; }
+    #right { left: 100px; }
+    #jump { right: 20px; background: #888; }
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
-  <div class="controls">
-    <div class="button" id="left"></div>
-    <div class="button" id="right"></div>
-    <div class="button" id="jump"></div>
-  </div>
+  <canvas id="gameCanvas"></canvas>
+  <button id="left" class="btn">&#9664;</button>
+  <button id="right" class="btn">&#9654;</button>
+  <button id="jump" class="btn">&#8679;</button>
+
   <script>
-    const canvas = document.getElementById('game');
+    const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
+    let W = canvas.width = window.innerWidth;
+    let H = canvas.height = window.innerHeight;
 
-    // Controls
+    let gravity = 0.6;
     let keys = { left: false, right: false, jump: false };
-    document.getElementById('left').ontouchstart = () => keys.left = true;
-    document.getElementById('left').ontouchend = () => keys.left = false;
-    document.getElementById('right').ontouchstart = () => keys.right = true;
-    document.getElementById('right').ontouchend = () => keys.right = false;
-    document.getElementById('jump').ontouchstart = () => keys.jump = true;
-    document.getElementById('jump').ontouchend = () => keys.jump = false;
 
-    // Sounds (stub, replace with actual file URLs)
-    const jumpSound = new Audio('jump.mp3');
-    const winSound = new Audio('win.mp3');
-    const hurtSound = new Audio('hurt.mp3');
-
-    class Player {
-      constructor() {
-        this.reset();
-      }
-      reset() {
-        this.x = 50;
-        this.y = canvas.height - 100;
-        this.w = 20;
-        this.h = 50;
-        this.vx = 0;
-        this.vy = 0;
-        this.onGround = false;
-        this.score = 0;
-      }
+    const player = {
+      x: 50, y: H - 150,
+      w: 30, h: 50,
+      vx: 0, vy: 0,
+      grounded: false,
       draw() {
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 2;
-        // Head
+        ctx.fillStyle = "#0f0";
         ctx.beginPath();
-        ctx.arc(this.x + this.w/2, this.y + 10, 10, 0, Math.PI * 2);
-        ctx.stroke();
+        // Head
+        ctx.arc(this.x + this.w/2, this.y, 10, 0, Math.PI * 2);
+        ctx.fill();
         // Body
         ctx.beginPath();
-        ctx.moveTo(this.x + this.w/2, this.y + 20);
-        ctx.lineTo(this.x + this.w/2, this.y + 40);
-        ctx.stroke();
+        ctx.moveTo(this.x + this.w/2, this.y + 10);
+        ctx.lineTo(this.x + this.w/2, this.y + 35);
         // Arms
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.w/2, this.y + 25);
-        ctx.lineTo(this.x - 5, this.y + 35);
-        ctx.moveTo(this.x + this.w/2, this.y + 25);
-        ctx.lineTo(this.x + this.w + 5, this.y + 35);
-        ctx.stroke();
+        ctx.moveTo(this.x + this.w/2, this.y + 15);
+        ctx.lineTo(this.x + this.w/2 - 10, this.y + 25);
+        ctx.moveTo(this.x + this.w/2, this.y + 15);
+        ctx.lineTo(this.x + this.w/2 + 10, this.y + 25);
         // Legs
-        ctx.beginPath();
-        ctx.moveTo(this.x + this.w/2, this.y + 40);
-        ctx.lineTo(this.x, this.y + this.h);
-        ctx.moveTo(this.x + this.w/2, this.y + 40);
-        ctx.lineTo(this.x + this.w, this.y + this.h);
+        ctx.moveTo(this.x + this.w/2, this.y + 35);
+        ctx.lineTo(this.x + this.w/2 - 10, this.y + 50);
+        ctx.moveTo(this.x + this.w/2, this.y + 35);
+        ctx.lineTo(this.x + this.w/2 + 10, this.y + 50);
+        ctx.strokeStyle = "#0f0";
+        ctx.lineWidth = 3;
         ctx.stroke();
-      }
+      },
       update() {
         if (keys.left) this.vx = -3;
         else if (keys.right) this.vx = 3;
         else this.vx = 0;
 
-        if (keys.jump && this.onGround) {
-          this.vy = -12;
-          this.onGround = false;
-          jumpSound.play();
-        }
-
-        this.vy += 0.6;
+        this.vy += gravity;
         this.x += this.vx;
         this.y += this.vy;
 
-        this.onGround = false;
-        for (let p of platforms) {
-          if (this.x < p.x + p.w && this.x + this.w > p.x &&
-              this.y + this.h < p.y + 10 && this.y + this.h + this.vy >= p.y) {
-            this.y = p.y - this.h;
+        this.grounded = false;
+        for (let plat of platforms) {
+          if (
+            this.x + this.w > plat.x && this.x < plat.x + plat.w &&
+            this.y + this.h >= plat.y && this.y + this.h <= plat.y + plat.h &&
+            this.vy >= 0
+          ) {
+            this.y = plat.y - this.h;
             this.vy = 0;
-            this.onGround = true;
+            this.grounded = true;
           }
         }
 
-        // Collision with enemies
-        for (let e of enemies) {
-          if (this.x < e.x + e.w && this.x + this.w > e.x &&
-              this.y < e.y + e.h && this.y + this.h > e.y) {
-            hurtSound.play();
-            this.reset();
-          }
+        // Win zone
+        if (
+          this.x + this.w > goal.x && this.x < goal.x + goal.w &&
+          this.y + this.h > goal.y && this.y < goal.y + goal.h
+        ) {
+          alert("You win!");
+          location.reload();
         }
 
-        if (this.y > canvas.height) this.reset();
-
-        // Win
-        if (this.x < goal.x + goal.w && this.x + this.w > goal.x &&
-            this.y < goal.y + goal.h && this.y + this.h > goal.y) {
-          winSound.play();
-          this.score++;
-          generateLevel();
+        // Fall
+        if (this.y > H) {
+          alert("You fell!");
+          location.reload();
         }
       }
+    };
+
+    const platforms = [];
+    for (let i = 0; i < 8; i++) {
+      let px = 100 + i * 150;
+      let py = H - (100 + (i * 70));
+      platforms.push({ x: px, y: py, w: 100, h: 10 });
     }
 
-    class Platform {
-      constructor(x, y, w) {
-        this.x = x;
-        this.y = y;
-        this.w = w;
-        this.h = 10;
-      }
-      draw() {
-        ctx.fillStyle = '#0f0';
-        ctx.fillRect(this.x, this.y, this.w, this.h);
-      }
+    const goal = { x: platforms[platforms.length - 1].x + 50, y: platforms[platforms.length - 1].y - 40, w: 40, h: 40 };
+
+    function drawPlatforms() {
+      ctx.fillStyle = "#888";
+      platforms.forEach(p => {
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+      });
     }
 
-    class Enemy {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.w = 20;
-        this.h = 20;
-        this.dir = 1;
-      }
-      draw() {
-        ctx.fillStyle = 'red';
-        ctx.fillRect(this.x, this.y, this.w, this.h);
-      }
-      update() {
-        this.x += this.dir * 2;
-        if (this.x < 0 || this.x + this.w > canvas.width) this.dir *= -1;
-      }
+    function drawGoal() {
+      ctx.fillStyle = "#ff0";
+      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
     }
 
-    const player = new Player();
-    let platforms = [];
-    let enemies = [];
-    let goal = {};
-
-    function generateLevel() {
-      platforms = [];
-      enemies = [];
-      let base = canvas.height - 20;
-      platforms.push(new Platform(0, base, canvas.width));
-      for (let i = 1; i <= 5; i++) {
-        let px = Math.random() * (canvas.width - 100);
-        let py = base - i * 100;
-        platforms.push(new Platform(px, py, 100));
-        if (Math.random() < 0.5) enemies.push(new Enemy(px + 30, py - 20));
-      }
-      goal = { x: platforms[platforms.length - 1].x + 35, y: platforms[platforms.length - 1].y - 30, w: 30, h: 30 };
-      player.reset();
-    }
-
-    generateLevel();
-
-    function loop() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function gameLoop() {
+      ctx.clearRect(0, 0, W, H);
+      drawPlatforms();
+      drawGoal();
       player.update();
       player.draw();
-      platforms.forEach(p => p.draw());
-      enemies.forEach(e => { e.update(); e.draw(); });
-
-      // Goal
-      ctx.fillStyle = 'gold';
-      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
-
-      // Score
-      ctx.fillStyle = 'white';
-      ctx.font = '20px sans-serif';
-      ctx.fillText('Score: ' + player.score, 10, 30);
-
-      requestAnimationFrame(loop);
+      requestAnimationFrame(gameLoop);
     }
 
-    loop();
+    gameLoop();
+
+    document.getElementById("left").addEventListener("touchstart", () => keys.left = true);
+    document.getElementById("left").addEventListener("touchend", () => keys.left = false);
+    document.getElementById("right").addEventListener("touchstart", () => keys.right = true);
+    document.getElementById("right").addEventListener("touchend", () => keys.right = false);
+    document.getElementById("jump").addEventListener("touchstart", () => {
+      if (player.grounded) {
+        player.vy = -12;
+        player.grounded = false;
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    });
   </script>
 </body>
 </html>
