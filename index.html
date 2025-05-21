@@ -1,447 +1,173 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>Platformer with Mode Toggle</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; overflow: hidden;
-    background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
-    font-family: monospace;
-    user-select: none;
-    touch-action: manipulation;
-  }
-  canvas {
-    display: block;
-    background: #121212;
-  }
-  #scoreboard {
-    position: fixed;
-    top: 12px; right: 12px;
-    color: #fff;
-    font-size: 1.3rem;
-    font-weight: bold;
-    z-index: 20;
-  }
-  #modeToggle {
-    position: fixed;
-    top: 12px; left: 12px;
-    background: #282828;
-    color: #fff;
-    border: none;
-    padding: 8px 12px;
-    font-size: 1rem;
-    cursor: pointer;
-    border-radius: 6px;
-    user-select: none;
-    z-index: 20;
-  }
-  /* Control circles */
-  .control-circle {
-    position: fixed;
-    width: 80px; height: 80px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.15);
-    border: 2px solid #aaa;
-    user-select: none;
-    touch-action: manipulation;
-    z-index: 15;
-  }
-  #leftBtn {
-    bottom: 25px;
-    left: 25px;
-  }
-  #rightBtn {
-    bottom: 25px;
-    left: 115px;
-  }
-  #jumpBtn {
-    bottom: 25px;
-    right: 25px;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upwards Platformer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(#87ceeb, #ffffff);
+    }
+    canvas {
+      display: block;
+      background: transparent;
+    }
+    .button {
+      position: absolute;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 24px;
+      text-align: center;
+      line-height: 70px;
+      user-select: none;
+    }
+    #left { bottom: 100px; left: 30px; }
+    #right { bottom: 100px; left: 120px; }
+    #jump { bottom: 100px; right: 30px; }
+    #powerups {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 20px;
+      color: black;
+      background: rgba(255,255,255,0.7);
+      padding: 5px;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body>
+  <canvas id="game"></canvas>
+  <div id="left" class="button">◀</div>
+  <div id="right" class="button">▶</div>
+  <div id="jump" class="button">⭡</div>
+  <div id="powerups">Powerups: 0</div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;let scrollOffset = 0;
 
-<div id="scoreboard">Score: 0</div>
-<button id="modeToggle">Mode: Horizontal</button>
+const player = {
+  x: 100,
+  y: canvas.height - 150,
+  width: 40,
+  height: 60,
+  dy: 0,
+  dx: 0,
+  jumpPower: -15,
+  gravity: 0.8,
+  grounded: false
+};
 
-<div id="leftBtn" class="control-circle"></div>
-<div id="rightBtn" class="control-circle"></div>
-<div id="jumpBtn" class="control-circle"></div>
+let platforms = [];
+let powerups = [];
+let powerupCount = 0;
+let keys = { left: false, right: false, jump: false };
 
-<canvas id="game"></canvas>
+function createPlatform(y) {
+  let x = Math.random() * (canvas.width - 100);
+  platforms.push({ x, y, width: 100, height: 20 });
+}
 
-<script>
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const scoreboard = document.getElementById('scoreboard');
-  const modeToggle = document.getElementById('modeToggle');
-  const leftBtn = document.getElementById('leftBtn');
-  const rightBtn = document.getElementById('rightBtn');
-  const jumpBtn = document.getElementById('jumpBtn');
+function generatePlatforms() {
+  for (let i = 0; i < 20; i++) createPlatform(canvas.height - i * 150);
+}
 
-  let width, height, scale;
+function createPowerup(y) {
+  let x = Math.random() * (canvas.width - 30);
+  powerups.push({ x, y, size: 20 });
+}
 
-  // Resize canvas full screen & handle DPI
-  function resize() {
-    scale = window.devicePixelRatio || 1;
-    width = window.innerWidth * scale;
-    height = window.innerHeight * scale;
-    canvas.width = width;
-    canvas.height = height;
-    canvas.style.width = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(scale, scale);
-  }
-  resize();
-  window.addEventListener('resize', resize);
+function generatePowerups() {
+  for (let i = 0; i < 5; i++) createPowerup(canvas.height - i * 600);
+}
 
-  // Mode: true = vertical jump only, false = horizontal movement allowed
-  let verticalMode = false;
+function drawPlayer() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(player.x, player.y, player.width, player.height);
+}
 
-  // Player object
-  const player = {
-    x: window.innerWidth / 2,
-    y: window.innerHeight - 150,
-    vy: 0,
-    vx: 0,
-    width: 20,
-    height: 40,
-    speed: 5,
-    jumps: 0,
-    maxJumps: 2,
-    grounded: false,
-  };
+function drawPlatforms() {
+  ctx.fillStyle = '#444';
+  platforms.forEach(p => ctx.fillRect(p.x, p.y + scrollOffset, p.width, p.height));
+}
 
-  // Game variables
-  const gravity = 0.6;
-  const jumpPower = -13;
-  const platformWidth = 110;
-  const platformHeight = 14;
-  const platformGap = 120;
-  const maxPlatforms = 10;
+function drawPowerups() {
+  ctx.fillStyle = 'gold';
+  powerups.forEach(p => ctx.fillRect(p.x, p.y + scrollOffset, p.size, p.size));
+}
 
-  let platforms = [];
-  let powerUps = [];
-  let winBlock = null;
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  player.dy += player.gravity;
+  player.y += player.dy;
 
-  let score = 0;
-  let scrollOffset = 0;
+  if (keys.left) player.x -= 5;
+  if (keys.right) player.x += 5;
 
-  // Controls state
-  let controls = {
-    left: false,
-    right: false,
-    jump: false,
-  };
-
-  // Helpers: create platform and power-ups
-  function createPlatform(y) {
-    const x = Math.random() * (window.innerWidth - platformWidth);
-    return { x, y, width: platformWidth, height: platformHeight };
-  }
-
-  function createPowerUp(y) {
-    const x = Math.random() * (window.innerWidth - 30);
-    // Power-up types: extra jump, speed boost, score multiplier
-    const types = ['jump', 'speed', 'score'];
-    const type = types[Math.floor(Math.random() * types.length)];
-    return { x, y, width: 30, height: 30, type, active: false, timer: 0 };
-  }
-
-  function createWinBlock(y) {
-    const x = Math.random() * (window.innerWidth - 50);
-    return { x, y, width: 50, height: 20 };
-  }
-
-  // Initialize platforms, powerups, win block
-  function initLevel() {
-    platforms = [];
-    powerUps = [];
-    let y = window.innerHeight - platformHeight;
-    for(let i = 0; i < maxPlatforms; i++) {
-      platforms.push(createPlatform(y));
-      // Place power-ups on some platforms randomly
-      if (Math.random() < 0.3) {
-        powerUps.push(createPowerUp(y - 40));
-      }
-      y -= platformGap;
-    }
-    winBlock = createWinBlock(y - 100);
-  }
-
-  // Drawing functions
-
-  // Draw player as stickman with swinging limbs
-  function drawPlayer() {
-    const px = player.x;
-    const py = player.y;
-    const t = performance.now() / 250;
-    const sway = Math.sin(t) * 5;
-
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#e0e0ff';
-    ctx.fillStyle = '#44aaff';
-
-    // Body
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px, py - 40);
-    ctx.stroke();
-
-    // Head
-    ctx.beginPath();
-    ctx.arc(px, py - 50, 10, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Arms swinging
-    ctx.beginPath();
-    ctx.moveTo(px, py - 30);
-    ctx.lineTo(px - 15 + sway, py - 10);
-    ctx.moveTo(px, py - 30);
-    ctx.lineTo(px + 15 - sway, py - 10);
-    ctx.stroke();
-
-    // Legs swinging opposite
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px - 10 - sway, py + 30);
-    ctx.moveTo(px, py);
-    ctx.lineTo(px + 10 + sway, py + 30);
-    ctx.stroke();
-  }
-
-  // Draw platforms
-  function drawPlatforms() {
-    ctx.fillStyle = '#55aaff';
-    platforms.forEach(p => {
-      ctx.fillRect(p.x, p.y - scrollOffset, p.width, p.height);
-    });
-  }
-
-  // Draw power-ups as colored squares with letter
-  function drawPowerUps() {
-    powerUps.forEach(pu => {
-      const colors = {jump: '#ffaa00', speed: '#00aaff', score: '#aaff00'};
-      const letters = {jump: 'J', speed: 'S', score: '$'};
-      ctx.fillStyle = colors[pu.type];
-      ctx.fillRect(pu.x, pu.y - scrollOffset, pu.width, pu.height);
-      ctx.fillStyle = '#222';
-      ctx.font = 'bold 20px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(letters[pu.type], pu.x + pu.width/2, pu.y - scrollOffset + pu.height/2);
-    });
-  }
-
-  // Draw win block as gold rectangle
-  function drawWinBlock() {
-    if(!winBlock) return;
-    ctx.fillStyle = '#ffdd00';
-    ctx.fillRect(winBlock.x, winBlock.y - scrollOffset, winBlock.width, winBlock.height);
-    ctx.fillStyle = '#333';
-    ctx.font = '16px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('WIN', winBlock.x + winBlock.width/2, winBlock.y - scrollOffset + winBlock.height/2);
-  }
-
-  // Update player physics & position
-  function updatePlayer() {
-    // Horizontal controls only in horizontal mode
-    if(!verticalMode) {
-      if(controls.left) player.vx = -player.speed;
-      else if(controls.right) player.vx = player.speed;
-      else player.vx = 0;
-      player.x += player.vx;
-      // Clamp player inside screen horizontally
-      if(player.x < 10) player.x = 10;
-      if(player.x > window.innerWidth - 10) player.x = window.innerWidth - 10;
-    } else {
-      // No horizontal movement in vertical mode
-      player.vx = 0;
-    }
-
-    // Apply gravity
-    player.vy += gravity;
-    player.y += player.vy;
-
-    // Prevent falling below bottom (ground)
-    const groundY = window.innerHeight - 40;
-    if(player.y > groundY) {
-      player.y = groundY;
-      player.vy = 0;
+  player.grounded = false;
+  platforms.forEach(p => {
+    if (
+      player.y + player.height < p.y + scrollOffset + 10 &&
+      player.y + player.height > p.y + scrollOffset - 10 &&
+      player.x + player.width > p.x &&
+      player.x < p.x + p.width
+    ) {
+      player.dy = 0;
       player.grounded = true;
-      player.jumps = 0;
-    } else {
-      player.grounded = false;
+      player.y = p.y + scrollOffset - player.height;
     }
+  });
 
-    // Platform collision
-    platforms.forEach(p => {
-      const px = p.x;
-      const py = p.y - scrollOffset;
-      const pw = p.width;
-      const ph = p.height;
-
-      // Check if player is falling and is above platform within X bounds
-      if(player.vy >= 0 &&
-        player.x + player.width/2 > px &&
-        player.x - player.width/2 < px + pw &&
-        player.y + player.height/2 >= py &&
-        player.y + player.height/2 <= py + ph
-      ) {
-        player.y = py - player.height/2;
-        player.vy = 0;
-        player.grounded = true;
-        player.jumps = 0;
-      }
-    });
-
-    // PowerUp collection
-    powerUps.forEach((pu, i) => {
-      const px = pu.x;
-      const py = pu.y - scrollOffset;
-      if(player.x + player.width/2 > px &&
-         player.x - player.width/2 < px + pu.width &&
-         player.y + player.height/2 > py &&
-         player.y - player.height/2 < py + pu.height) {
-        applyPowerUp(pu.type);
-        powerUps.splice(i, 1);
-      }
-    });
-
-    // Win block collision
-    if(winBlock) {
-      const wx = winBlock.x;
-      const wy = winBlock.y - scrollOffset;
-      if(player.x + player.width/2 > wx &&
-         player.x - player.width/2 < wx + winBlock.width &&
-         player.y + player.height/2 > wy &&
-         player.y - player.height/2 < wy + winBlock.height) {
-        alert("You won! Reload to play again.");
-        resetGame();
-      }
+  powerups = powerups.filter(p => {
+    if (
+      player.x < p.x + p.size &&
+      player.x + player.width > p.x &&
+      player.y < p.y + scrollOffset + p.size &&
+      player.y + player.height > p.y + scrollOffset
+    ) {
+      powerupCount++;
+      document.getElementById('powerups').innerText = 'Powerups: ' + powerupCount;
+      return false;
     }
+    return true;
+  });
+
+  if (player.y < canvas.height / 2) {
+    let diff = (canvas.height / 2 - player.y);
+    scrollOffset += diff;
+    player.y = canvas.height / 2;
   }
 
-  // Apply power-up effects
-  function applyPowerUp(type) {
-    switch(type) {
-      case 'jump':
-        player.maxJumps = Math.min(player.maxJumps + 1, 5);
-        break;
-      case 'speed':
-        player.speed = Math.min(player.speed + 2, 15);
-        break;
-      case 'score':
-        score += 50;
-        break;
-    }
-    updateScore();
+  scrollOffset = Math.max(scrollOffset, 0);
+
+  drawPlatforms();
+  drawPowerups();
+  drawPlayer();
+
+  requestAnimationFrame(update);
+}
+
+generatePlatforms();
+generatePowerups();
+update();
+
+document.getElementById('left').addEventListener('touchstart', () => keys.left = true);
+document.getElementById('left').addEventListener('touchend', () => keys.left = false);
+document.getElementById('right').addEventListener('touchstart', () => keys.right = true);
+document.getElementById('right').addEventListener('touchend', () => keys.right = false);
+document.getElementById('jump').addEventListener('touchstart', () => {
+  if (player.grounded) {
+    player.dy = player.jumpPower;
   }
+});
 
-  // Update score display
-  function updateScore() {
-    scoreboard.textContent = `Score: ${score}`;
-  }
-
-  // Reset game
-  function resetGame() {
-    score = 0;
-    player.x = window.innerWidth / 2;
-    player.y = window.innerHeight - 150;
-    player.vx = 0;
-    player.vy = 0;
-    player.jumps = 0;
-    player.maxJumps = 2;
-    player.speed = 5;
-    scrollOffset = 0;
-    initLevel();
-    updateScore();
-  }
-
-  // Game loop
-  function gameLoop() {
-    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-    // Scroll screen up if player goes above half height
-    if(player.y < window.innerHeight / 2) {
-      scrollOffset += (window.innerHeight / 2 - player.y);
-      player.y = window.innerHeight / 2;
-    }
-
-    updatePlayer();
-    drawPlatforms();
-    drawPowerUps();
-    drawWinBlock();
-    drawPlayer();
-
-    requestAnimationFrame(gameLoop);
-  }
-
-  // Jump function
-  function jump() {
-    if(player.jumps < player.maxJumps) {
-      player.vy = jumpPower;
-      player.jumps++;
-      player.grounded = false;
-    }
-  }
-
-  // Input handlers
-
-  leftBtn.addEventListener('touchstart', e => {
-    e.preventDefault();
-    controls.left = true;
-  });
-  leftBtn.addEventListener('touchend', e => {
-    e.preventDefault();
-    controls.left = false;
-  });
-  rightBtn.addEventListener('touchstart', e => {
-    e.preventDefault();
-    controls.right = true;
-  });
-  rightBtn.addEventListener('touchend', e => {
-    e.preventDefault();
-    controls.right = false;
-  });
-  jumpBtn.addEventListener('touchstart', e => {
-    e.preventDefault();
-    jump();
-  });
-
-  // Also support keyboard for testing
-  window.addEventListener('keydown', e => {
-    if(e.repeat) return;
-    if(e.key === 'ArrowLeft') controls.left = true;
-    if(e.key === 'ArrowRight') controls.right = true;
-    if(e.key === 'ArrowUp' || e.key === ' ') jump();
-  });
-  window.addEventListener('keyup', e => {
-    if(e.key === 'ArrowLeft') controls.left = false;
-    if(e.key === 'ArrowRight') controls.right = false;
-  });
-
-  // Mode toggle button handler
-  modeToggle.addEventListener('click', () => {
-    verticalMode = !verticalMode;
-    modeToggle.textContent = verticalMode ? 'Mode: Vertical Jump Only' : 'Mode: Horizontal';
-    // Hide left/right buttons in vertical mode
-    leftBtn.style.display = verticalMode ? 'none' : 'block';
-    rightBtn.style.display = verticalMode ? 'none' : 'block';
-  });
-
-  // Initialize game
-  resetGame();
-  gameLoop();
-})();
-</script>
-
+  </script>
 </body>
 </html>
