@@ -6,17 +6,14 @@ const winMessage = document.getElementById('winMessage');
 
 let canvasWidth, canvasHeight;
 
-// Adaptive resize for canvas to fill screen but keep 16:9 ratio
 function resize() {
   const windowRatio = window.innerWidth / window.innerHeight;
   const gameRatio = 16 / 9;
 
   if (windowRatio > gameRatio) {
-    // window wider than game ratio
     canvasHeight = window.innerHeight;
     canvasWidth = canvasHeight * gameRatio;
   } else {
-    // window taller than game ratio
     canvasWidth = window.innerWidth;
     canvasHeight = canvasWidth / gameRatio;
   }
@@ -41,16 +38,18 @@ class Player {
     this.speed = 5 * (canvasWidth / 800);
     this.jumping = false;
     this.grounded = false;
+    this.step = 0; // for animation timing
   }
 
   update() {
     if (keys['left']) {
       if (this.velX > -this.speed) this.velX -= 1;
+      this.step += 0.2; // increment animation step when moving
     } else {
-      // Slow down smoothly if no left pressed
       this.velX *= friction;
+      if (this.step > 0) this.step -= 0.1; // slow down animation swing
+      if (this.step < 0) this.step = 0;
     }
-    // No right movement, just left and jump for now
 
     if (keys['jump']) {
       if (!this.jumping && this.grounded) {
@@ -76,8 +75,61 @@ class Player {
   }
 
   draw() {
-    ctx.fillStyle = '#0f0';
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    const centerX = this.x + this.width / 2;
+    const bottomY = this.y + this.height;
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 4 * (canvasWidth / 800);
+
+    // Head
+    const headRadius = 8 * (canvasWidth / 800);
+    ctx.beginPath();
+    ctx.arc(centerX, this.y + headRadius, headRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Body line
+    ctx.beginPath();
+    ctx.moveTo(centerX, this.y + 2 * headRadius);
+    ctx.lineTo(centerX, bottomY - 20 * (canvasHeight / 450));
+    ctx.stroke();
+
+    // Limb swing amplitude
+    const swing = Math.sin(this.step) * 15;
+
+    // Arms
+    ctx.beginPath();
+    if (this.jumping) {
+      // arms up when jumping
+      ctx.moveTo(centerX, this.y + 2 * headRadius);
+      ctx.lineTo(centerX - 15 * (canvasWidth / 800), this.y + 2 * headRadius - 20 * (canvasHeight / 450));
+      ctx.moveTo(centerX, this.y + 2 * headRadius);
+      ctx.lineTo(centerX + 15 * (canvasWidth / 800), this.y + 2 * headRadius - 20 * (canvasHeight / 450));
+    } else {
+      // swinging arms
+      ctx.moveTo(centerX, this.y + 2 * headRadius);
+      ctx.lineTo(centerX - 20 * (canvasWidth / 800), this.y + 2 * headRadius + swing * (canvasHeight / 450) * 0.5);
+      ctx.moveTo(centerX, this.y + 2 * headRadius);
+      ctx.lineTo(centerX + 20 * (canvasWidth / 800), this.y + 2 * headRadius - swing * (canvasHeight / 450) * 0.5);
+    }
+    ctx.stroke();
+
+    // Legs
+    ctx.beginPath();
+    if (this.jumping) {
+      // legs bent when jumping
+      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
+      ctx.lineTo(centerX - 15 * (canvasWidth / 800), bottomY - 5 * (canvasHeight / 450));
+      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
+      ctx.lineTo(centerX + 15 * (canvasWidth / 800), bottomY - 5 * (canvasHeight / 450));
+    } else {
+      // swinging legs
+      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
+      ctx.lineTo(centerX - 20 * (canvasWidth / 800), bottomY + swing * (canvasHeight / 450) * 0.5);
+      ctx.moveTo(centerX, bottomY - 20 * (canvasHeight / 450));
+      ctx.lineTo(centerX + 20 * (canvasWidth / 800), bottomY - swing * (canvasHeight / 450) * 0.5);
+    }
+    ctx.stroke();
   }
 }
 
@@ -102,10 +154,9 @@ let gameWon = false;
 
 const keys = {};
 
-// Auto-generate platforms with goal platform at the right end
 function generatePlatforms() {
   platforms = [];
-  platforms.push(new Platform(0, canvas.height - 10, canvas.width, 10)); // ground
+  platforms.push(new Platform(0, canvas.height - 10, canvas.width, 10));
 
   let xPos = 100 * (canvasWidth / 800);
   while (xPos < canvasWidth - 150) {
@@ -115,7 +166,6 @@ function generatePlatforms() {
     xPos += width + (80 + Math.random() * 70) * (canvasWidth / 800);
   }
 
-  // Goal platform at the far right
   platforms.push(new Platform(canvasWidth - 120 * (canvasWidth / 800), canvasHeight - 60 * (canvasHeight / 450), 100 * (canvasWidth / 800), 15 * (canvasHeight / 450), true));
 }
 
@@ -162,7 +212,6 @@ function update() {
   requestAnimationFrame(update);
 }
 
-// Touch / Mouse for mobile controls
 function setupControlButton(btn, keyName) {
   btn.addEventListener('touchstart', (e) => {
     e.preventDefault();
@@ -189,7 +238,6 @@ function setupControlButton(btn, keyName) {
 setupControlButton(leftBtn, 'left');
 setupControlButton(jumpBtn, 'jump');
 
-// Keyboard fallback (left arrow and space)
 window.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') keys['left'] = true;
   if (e.key === ' ') keys['jump'] = true;
