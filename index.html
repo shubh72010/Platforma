@@ -67,9 +67,8 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // === ZETA: Descent into Void — Pure Canvas Version, FIXED MOVEMENT & ATTACK ===
+  // === ZETA: Descent into Void — Pure Canvas Version, Movement FIXED ===
 
-  // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
   const TILE = 16;
   const PLAYER_SIZE = 16;
@@ -92,7 +91,6 @@
   document.getElementById("controls").style.display = isMobile ? "flex" : "none";
   let mobileLeft = false, mobileRight = false, mobileJump = false, mobileAttack = false, mobileInteract = false;
   function bindMobileControls() {
-    // Button IDs must match variable names after 'btn-' and be lowercase
     const map = {
       "btn-left": "mobileLeft",
       "btn-right": "mobileRight",
@@ -125,29 +123,29 @@
 
   // --- Simple Assets (drawn, no images) ---
   function drawTile(ch, x, y) {
-    if (ch === '=' || ch === '|') { // Wall/floor
+    if (ch === '=' || ch === '|') {
       ctx.fillStyle = ch === '=' ? "#4b236c" : "#33103c";
       ctx.fillRect(x, y, TILE, TILE);
-    } else if (ch === '+') { // Door
+    } else if (ch === '+') {
       ctx.strokeStyle = "#a0a";
       ctx.lineWidth = 3;
       ctx.strokeRect(x+2, y+2, TILE-4, TILE-4);
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 1;
-    } else if (ch === '*') { // Cultist enemy
+    } else if (ch === '*') {
       ctx.fillStyle = "#a01034";
       ctx.fillRect(x+2, y+4, 12, 10);
       ctx.fillStyle = "#f33";
       ctx.fillRect(x+5, y+7, 2, 2);
       ctx.fillRect(x+9, y+7, 2, 2);
-    } else if (ch === 'n') { // NPC
+    } else if (ch === 'n') {
       ctx.fillStyle = "#4060c0";
       ctx.fillRect(x+2, y+2, 12, 13);
       ctx.fillStyle = "#fff";
       ctx.fillRect(x+6, y+5, 4, 4);
       ctx.fillStyle = "#0ef";
       ctx.fillRect(x+7, y+7, 2, 2);
-    } else if (ch === '@') { // Terminal/lore
+    } else if (ch === '@') {
       ctx.fillStyle = "#333";
       ctx.fillRect(x+3, y+6, 10, 6);
       ctx.fillStyle = "#0f0";
@@ -195,9 +193,11 @@
     }
   };
 
+  // --- Player should start ON TOP of floor, not inside ---
+  // So, set player.y = 4*TILE (row 4 = 64), i.e. just above ground tiles
   let gameState = {
     room: "sanctum",
-    player: {x: 32, y: 110, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false},
+    player: {x: 32, y: 64, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false},
     dialog: null,
     enemies: [],
     notes: [],
@@ -214,7 +214,6 @@
     ctx.fillStyle = "#fff";
     ctx.fillRect(-4, -4, 8, 8);
     ctx.restore();
-    // Particle trail
     if (Math.random()<0.5) {
       ctx.globalAlpha = 0.22;
       ctx.fillStyle = "#c0a0ff";
@@ -223,7 +222,6 @@
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    // Attack animation (sigil flash in front)
     if (attacking && attackFrame>0) {
       ctx.save();
       ctx.globalAlpha = 0.75;
@@ -241,7 +239,6 @@
     }
   }
 
-  // --- Draw Hearts/Corruption Meter ---
   function drawHearts(hp) {
     for (let i=0; i<Math.ceil(hp/2); i++) {
       ctx.fillStyle = "#f33";
@@ -254,7 +251,6 @@
     }
   }
 
-  // --- Dialog System ---
   const dialogDiv = document.getElementById("dialog");
   function showDialog(text, choices) {
     dialogActive = true;
@@ -305,63 +301,46 @@
     }
   });
 
-  // --- Input ---
   let keys = {};
   window.addEventListener("keydown", e => {
     keys[e.key.toLowerCase()]=true;
-    // Attack: Space
-    if (e.key === " " && !dialogActive) {
-      startAttack();
-    }
+    if (e.key === " " && !dialogActive) startAttack();
   });
   window.addEventListener("keyup", e => keys[e.key.toLowerCase()]=false);
 
-  // --- Attack logic ---
   function startAttack() {
     let p = gameState.player;
     if (!p.attacking) {
       p.attacking = true;
-      attackTimer = 12; // ~0.2s
+      attackTimer = 12;
     }
   }
 
-  // --- Main Loop ---
   function gameLoop() {
-    // --- Update Logic ---
-    // Player input
     let p = gameState.player;
     let left = keys['arrowleft']||keys['a']||mobileLeft, right = keys['arrowright']||keys['d']||mobileRight;
     let jump = keys['arrowup']||keys['w']||mobileJump;
-    // Movement only if not in dialog
     if (!dialogActive) {
       if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
       else p.vx = 0;
       if (jump && p.onGround) { p.vy = -PLAYER_JUMP; mobileJump=false; }
-      // Mobile attack
-      if (mobileAttack) {
-        startAttack();
-        mobileAttack = false;
-      }
+      if (mobileAttack) { startAttack(); mobileAttack = false; }
     } else {
       p.vx = 0;
     }
-    // Gravity
     p.vy += GRAVITY;
-    // Collisions (simple, only for walls/floors)
     let nextX = p.x + p.vx, nextY = p.y + p.vy;
     let col = collideWithMap(nextX, p.y);
     if (!col.x) p.x = nextX; else p.vx = 0;
     col = collideWithMap(p.x, nextY);
     if (!col.y) { p.y = nextY; p.onGround = false; }
     else { p.vy = 0; p.onGround = true; }
-    // Room door switch
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
     if (door && !dialogActive) {
       let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
       if (d) switchRoom(d.target, d.tx, d.ty, p.hp);
     }
-    // Interact (E/btn)
     if ((keys['e']||mobileInteract) && !dialogActive) {
       let tx = Math.floor((p.x+8)/TILE), ty = Math.floor((p.y+8)/TILE);
       let sym = charAt(tx, ty-1);
@@ -374,35 +353,28 @@
       if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
       mobileInteract = false;
     }
-    // Attack timer update
     if (p.attacking) {
       attackTimer--;
       if (attackTimer<=0) { p.attacking = false; attackTimer = 0; }
     }
-    // --- Render ---
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = rooms[gameState.room].bg;
     ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.globalAlpha = 0.14+Math.random()*0.04;
     ctx.fillStyle = FOG_COLOR;
     ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
-    // Draw map
     let map = rooms[gameState.room].map;
     for (let y=0;y<map.length;y++)
       for (let x=0;x<map[0].length;x++)
         drawTile(map[y][x], x*TILE, y*TILE);
-    // Draw player
     drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
-    // Draw UI
     drawHearts(p.hp);
-    // Room label
     ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
     ctx.textAlign = "center";
     ctx.fillText(rooms[gameState.room].name, CANVAS_BASE_W/2, 32);
     requestAnimationFrame(gameLoop);
   }
 
-  // --- Map helpers ---
   function charAt(tx,ty) {
     let map = rooms[gameState.room].map;
     if (tx<0||ty<0||ty>=map.length||tx>=map[0].length) return ' ';
@@ -427,7 +399,6 @@
     gameState.player.hp = hp||6;
   }
 
-  // --- Game Boot ---
   showDialog("Welcome to ZETA: Descent into Void");
   requestAnimationFrame(gameLoop);
 
