@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>ZETA: Descent into Void</title>
+  <title>ZETA: Procedural Platformer</title>
   <meta name="viewport" content="width=320,initial-scale=1,user-scalable=no">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
@@ -67,7 +67,7 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // ==== ZETA: Descent into Void - Procedural Level + Working Enemies ====
+  // ==== ZETA: Fixes for Enemies, Points, and Buttons ====
 
   // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
@@ -148,31 +148,58 @@
     for(let y=0; y<height; y++) { map[y][0]='='; map[y][width-1]='='; }
     // Place floor
     for(let x=1; x<width-1; x++) map[height-2][x]='=';
-    // Add random platforms
+    // Add random platforms (and record their locations)
+    let platforms = [];
     for(let i=0; i<4; i++) {
       let px = 2+Math.floor(Math.random()*(width-6));
       let py = 2+Math.floor(Math.random()*(height-4));
-      for(let j=0; j<3+Math.floor(Math.random()*2); j++)
+      let len = 3+Math.floor(Math.random()*2);
+      for(let j=0; j<len; j++)
         if(px+j<width-1) map[py][px+j]='=';
+      platforms.push({x:px, y:py, len:len});
     }
     // Place door (always on right side)
     let doorX = width-2, doorY = height-3;
     map[doorY][doorX] = '+';
-    // Place a few enemies on platforms or floor
+    // Place a few enemies: only on platforms or floor, open space above
     let enemyList = [];
-    let placed = 0;
-    while(placed < 3) {
-      let ex = 2+Math.floor(Math.random()*(width-4));
-      let ey = 1+Math.floor(Math.random()*(height-4));
-      if (map[ey][ex] === ' ' && (map[ey+1][ex] === '=')) {
+    let placed = 0, tries = 0;
+    while(placed < 3 && tries < 100) {
+      let pickPlatform = Math.floor(Math.random()*platforms.length);
+      let pform = platforms[pickPlatform];
+      let ex = pform.x + Math.floor(Math.random()*pform.len);
+      let ey = pform.y-1;
+      if (map[ey][ex] === ' ' && map[ey+1][ex]==='=') {
         map[ey][ex]='*';
         enemyList.push({x:ex*TILE, y:ey*TILE, vx:ENEMY_SPEED*(Math.random()<0.5?-1:1), vy:0, dir:Math.random()<0.5?-1:1, dead:false});
         placed++;
       }
+      tries++;
+    }
+    // Place a few collectibles (points/orbs), only on platforms/floor
+    let collectibles = [];
+    for(let i=0;i<4;i++) {
+      let pick = Math.floor(Math.random()*(platforms.length+1));
+      let pos;
+      if(pick<platforms.length) {
+        let pf=platforms[pick];
+        let px = pf.x + Math.floor(Math.random()*pf.len);
+        let py = pf.y-1;
+        if(map[py][px]===' ' && map[py+1][px]==='=') {
+          map[py][px]='o'; collectibles.push({x:px*TILE, y:py*TILE, taken:false});
+        }
+      } else {
+        // Floor
+        let px = 2+Math.floor(Math.random()*(width-4));
+        let py = height-3;
+        if(map[py][px]===' ' && map[py+1][px]==='=') {
+          map[py][px]='o'; collectibles.push({x:px*TILE, y:py*TILE, taken:false});
+        }
+      }
     }
     // Place NPC or lore
     map[2][2]='n'; map[2][width-3]='@';
-    return {map: map.map(row=>row.join('')), enemies: enemyList, door: {x:doorX, y:doorY}};
+    return {map: map.map(row=>row.join('')), enemies: enemyList, collectibles, door: {x:doorX, y:doorY}};
   }
 
   // --- Rooms ---
@@ -192,8 +219,10 @@
     player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
     dialog: null,
     enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
+    collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
     notes: [],
-    corruption: 0
+    corruption: 0,
+    score: 0
   };
 
   // --- Drawing ---
@@ -225,6 +254,17 @@
       ctx.fillRect(x+3, y+6, 10, 6);
       ctx.fillStyle = "#0f0";
       ctx.fillRect(x+6, y+7, 4, 2);
+    } else if (ch === 'o') {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x+8, y+8, 6, 0, 6.29);
+      ctx.fillStyle = "#ffe066";
+      ctx.shadowColor = "#ffffaa";
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+      ctx.strokeStyle="#f95";ctx.beginPath();ctx.arc(x+8,y+8,6,0,6.29);ctx.stroke();
     }
   }
 
@@ -354,6 +394,7 @@
       ctx.font = "bold 16px "+font;
       ctx.fillStyle="#fff";
       ctx.fillText("Tap R to restart", CANVAS_BASE_W/2, CANVAS_BASE_H/2+32);
+      ctx.fillText("Score: "+gameState.score, CANVAS_BASE_W/2, CANVAS_BASE_H/2+52);
       requestAnimationFrame(gameLoop);
       return;
     }
@@ -368,7 +409,6 @@
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
       else p.vx = 0;
 
-      // If pressing jump and jumpCount < 2, jump and increment jumpCount
       if (jump && p.jumpCount < 2) {
         p.vy = -PLAYER_JUMP;
         p.onGround = false;
@@ -376,7 +416,7 @@
         controlsState.jump = false; // Prevent holding jump
       }
       if (controlsState.attack) { startAttack(); controlsState.attack = false; }
-      if (controlsState.interact) { /* interact logic here if needed */ controlsState.interact = false; }
+      if (controlsState.interact) { controlsState.interact = false; }
     } else {
       p.vx = 0;
     }
@@ -400,10 +440,8 @@
     // --- Enemy logic ---
     for(let e of gameState.enemies) {
       if(e.dead) continue;
-      // Patrol: Turn if edge or wall
       let ex = e.x/TILE, ey = e.y/TILE;
       let nx = Math.floor((e.x+e.dir*ENEMY_SPEED*12)/TILE);
-      // Only move if platform in front
       let below = charAt(nx, ey+1);
       let front = charAt(nx, ey);
       if((below==='='||below==='|') && (front===' '||front==='*')) {
@@ -431,10 +469,18 @@
     }
     if(p.invuln) p.invuln--;
 
+    // --- Collectibles logic ---
+    for(let c of gameState.collectibles) {
+      if(c.taken) continue;
+      if(Math.abs(p.x-c.x)<12 && Math.abs(p.y-c.y)<12) {
+        c.taken = true;
+        gameState.score += 10;
+      }
+    }
+
     // --- Door/level generation ---
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
     if (door && !dialogActive) {
-      // Generate new room every time!
       let newRoom = generateRoom();
       rooms["autogen"] = {
         name: "Procedural Room",
@@ -442,8 +488,7 @@
         doors: [ { x: newRoom.door.x, y: newRoom.door.y, target: "autogen", tx: 1, ty: newRoom.door.y } ],
         bg: "#181035"
       };
-      switchRoom("autogen", 1, newRoom.door.y, p.hp);
-      gameState.enemies = JSON.parse(JSON.stringify(newRoom.enemies));
+      switchRoom("autogen", 1, newRoom.door.y, p.hp, newRoom.enemies, newRoom.collectibles);
       return requestAnimationFrame(gameLoop);
     }
 
@@ -480,10 +525,18 @@
     // Enemies
     for(let e of gameState.enemies) if(!e.dead)
       drawTile('*', e.x, e.y);
+    // Collectibles
+    for(let c of gameState.collectibles)
+      if(!c.taken) drawTile('o', c.x, c.y);
     // Player
     if(!p.invuln || (p.invuln%4<2))
       drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
     drawHearts(p.hp);
+    // Score
+    ctx.font = "bold 16px "+font; ctx.fillStyle="#ffe066";
+    ctx.textAlign = "left";
+    ctx.fillText("Score: "+gameState.score, 10, 48);
+    // Room label
     ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
     ctx.textAlign = "center";
     ctx.fillText(rooms[gameState.room].name, CANVAS_BASE_W/2, 32);
@@ -507,7 +560,7 @@
     if (map[ty][tx]==='+') return {x:tx,y:ty};
     return null;
   }
-  function switchRoom(name, tx, ty, hp) {
+  function switchRoom(name, tx, ty, hp, enemies, collectibles) {
     gameState.room = name;
     gameState.player.x = tx*TILE;
     gameState.player.y = ty*TILE;
@@ -516,6 +569,8 @@
     gameState.player.jumpCount = 0;
     gameState.player.invuln = 0;
     gameState.player.attacking = false;
+    gameState.enemies = JSON.parse(JSON.stringify(enemies));
+    gameState.collectibles = JSON.parse(JSON.stringify(collectibles));
   }
 
   // --- Restart on Game Over ---
@@ -535,16 +590,4 @@
         player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
         dialog: null,
         enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
-        notes: [],
-        corruption: 0
-      });
-      gameOver = false;
-    }
-  });
-
-  showDialog("Welcome to ZETA: Descent into Void");
-  requestAnimationFrame(gameLoop);
-
-  </script>
-</body>
-</html>
+        collectibles: JSON.parse(JSON.stringify(autogenRoom.collectible
