@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>ZETA: Descent into Void</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=320,initial-scale=1,user-scalable=no">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
     html, body {margin:0;height:100%;overflow:hidden;background:#1a001a;}
@@ -33,7 +33,6 @@
       user-select: none;
       pointer-events: auto;
     }
-    /* On-screen controls for mobile */
     .controls {
       display: none; position: absolute; bottom: 18px; left: 50%; transform:translateX(-50%);
       z-index: 20; gap: 12px; width: 100vw; justify-content: center;
@@ -68,20 +67,20 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // === ZETA: Descent into Void — Pure Canvas Version ===
+  // === ZETA: Descent into Void — Pure Canvas Version, FIXED MOVEMENT & ATTACK ===
 
   // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
   const TILE = 16;
   const PLAYER_SIZE = 16;
-  const PLAYER_SPEED = 1.3;
+  const PLAYER_SPEED = 1.7;
   const PLAYER_JUMP = 3.8;
   const GRAVITY = 0.18;
   const ROOM_BG = "#1a001a";
   const FOG_COLOR = "rgba(40,0,40,0.13)";
-  const FPS = 60;
   const font = "'Press Start 2P', monospace";
   let dialogActive = false;
+  let attackTimer = 0;
 
   // --- Canvas / Context ---
   const canvas = document.getElementById('gameCanvas');
@@ -93,18 +92,19 @@
   document.getElementById("controls").style.display = isMobile ? "flex" : "none";
   let mobileLeft = false, mobileRight = false, mobileJump = false, mobileAttack = false, mobileInteract = false;
   function bindMobileControls() {
-    const ids = {
-      btnLeft: 'mobileLeft',
-      btnRight: 'mobileRight',
-      btnJump: 'mobileJump',
-      btnAttack: 'mobileAttack',
-      btnInteract: 'mobileInteract'
+    // Button IDs must match variable names after 'btn-' and be lowercase
+    const map = {
+      "btn-left": "mobileLeft",
+      "btn-right": "mobileRight",
+      "btn-jump": "mobileJump",
+      "btn-attack": "mobileAttack",
+      "btn-interact": "mobileInteract"
     };
-    Object.entries(ids).forEach(([btn, flag]) => {
-      const el = document.getElementById(btn.replace(/^btn/,'btn-').toLowerCase());
-      el.addEventListener("touchstart", e => { e.preventDefault(); window[flag]=true; el.classList.add("pressed"); }, {passive:false});
-      el.addEventListener("touchend", e => { e.preventDefault(); window[flag]=false; el.classList.remove("pressed"); }, {passive:false});
-      el.addEventListener("touchcancel", e => { window[flag]=false; el.classList.remove("pressed"); });
+    Object.entries(map).forEach(([btnId, flag]) => {
+      const el = document.getElementById(btnId);
+      el.addEventListener("touchstart", e => { e.preventDefault(); window[flag] = true; el.classList.add("pressed"); }, {passive:false});
+      el.addEventListener("touchend", e => { e.preventDefault(); window[flag] = false; el.classList.remove("pressed"); }, {passive:false});
+      el.addEventListener("touchcancel", e => { window[flag] = false; el.classList.remove("pressed"); });
     });
   }
   bindMobileControls();
@@ -197,18 +197,18 @@
 
   let gameState = {
     room: "sanctum",
-    player: {x: 32, y: 110, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1},
-    dialog: null, // {text:[], idx, chars, choices}
+    player: {x: 32, y: 110, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false},
+    dialog: null,
     enemies: [],
     notes: [],
     corruption: 0
   };
 
   // --- Player Drawing ---
-  function drawPlayer(x, y) {
+  function drawPlayer(x, y, facing, attacking, attackFrame) {
     ctx.save();
     ctx.translate(x+PLAYER_SIZE/2, y+PLAYER_SIZE/2);
-    ctx.scale(gameState.player.facing,1);
+    ctx.scale(facing,1);
     ctx.fillStyle = "#c0a0ff";
     ctx.fillRect(-8, -8, 16, 16);
     ctx.fillStyle = "#fff";
@@ -222,6 +222,22 @@
       ctx.arc(x+8+Math.random()*4-2, y+16, 2+Math.random()*2, 0, 6.29);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+    // Attack animation (sigil flash in front)
+    if (attacking && attackFrame>0) {
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = "#b7a3ff";
+      ctx.lineWidth = 2.3;
+      let fx = facing>0 ? x+18 : x-2;
+      let fy = y+8;
+      ctx.beginPath();
+      ctx.moveTo(fx, fy-6); ctx.lineTo(fx, fy+6);
+      ctx.moveTo(fx-6, fy); ctx.lineTo(fx+6, fy);
+      ctx.moveTo(fx-5, fy-5); ctx.lineTo(fx+5, fy+5);
+      ctx.moveTo(fx-5, fy+5); ctx.lineTo(fx+5, fy-5);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -278,7 +294,6 @@
     dialogDiv.style.display = "none";
     dialogDiv.onclick = null;
   }
-  // Choices (tap/click)
   dialogDiv.addEventListener("click", e => {
     if (!dialogActive) return;
     if (gameState.dialog && gameState.dialog.choices) {
@@ -292,8 +307,23 @@
 
   // --- Input ---
   let keys = {};
-  window.addEventListener("keydown", e => keys[e.key.toLowerCase()]=true);
+  window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()]=true;
+    // Attack: Space
+    if (e.key === " " && !dialogActive) {
+      startAttack();
+    }
+  });
   window.addEventListener("keyup", e => keys[e.key.toLowerCase()]=false);
+
+  // --- Attack logic ---
+  function startAttack() {
+    let p = gameState.player;
+    if (!p.attacking) {
+      p.attacking = true;
+      attackTimer = 12; // ~0.2s
+    }
+  }
 
   // --- Main Loop ---
   function gameLoop() {
@@ -302,23 +332,30 @@
     let p = gameState.player;
     let left = keys['arrowleft']||keys['a']||mobileLeft, right = keys['arrowright']||keys['d']||mobileRight;
     let jump = keys['arrowup']||keys['w']||mobileJump;
+    // Movement only if not in dialog
     if (!dialogActive) {
       if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
       else p.vx = 0;
       if (jump && p.onGround) { p.vy = -PLAYER_JUMP; mobileJump=false; }
+      // Mobile attack
+      if (mobileAttack) {
+        startAttack();
+        mobileAttack = false;
+      }
+    } else {
+      p.vx = 0;
     }
     // Gravity
     p.vy += GRAVITY;
-    // Move player
-    let newX = p.x + p.vx, newY = p.y + p.vy;
-    // Collisions (walls)
-    let col = collideWithMap(newX, newY);
-    p.onGround = false;
-    if (col.y) { p.vy = 0; if (p.vy > 0) p.onGround = true; }
-    if (!col.x) p.x = newX; else p.vx = 0;
-    if (!col.y) p.y = newY; else p.vy = 0;
-    // Door/room
+    // Collisions (simple, only for walls/floors)
+    let nextX = p.x + p.vx, nextY = p.y + p.vy;
+    let col = collideWithMap(nextX, p.y);
+    if (!col.x) p.x = nextX; else p.vx = 0;
+    col = collideWithMap(p.x, nextY);
+    if (!col.y) { p.y = nextY; p.onGround = false; }
+    else { p.vy = 0; p.onGround = true; }
+    // Room door switch
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
     if (door && !dialogActive) {
       let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
@@ -337,11 +374,15 @@
       if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
       mobileInteract = false;
     }
+    // Attack timer update
+    if (p.attacking) {
+      attackTimer--;
+      if (attackTimer<=0) { p.attacking = false; attackTimer = 0; }
+    }
     // --- Render ---
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = rooms[gameState.room].bg;
     ctx.fillRect(0,0,canvas.width,canvas.height);
-    // Flicker/fog
     ctx.globalAlpha = 0.14+Math.random()*0.04;
     ctx.fillStyle = FOG_COLOR;
     ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
@@ -351,15 +392,13 @@
       for (let x=0;x<map[0].length;x++)
         drawTile(map[y][x], x*TILE, y*TILE);
     // Draw player
-    drawPlayer(p.x,p.y);
+    drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
     // Draw UI
     drawHearts(p.hp);
     // Room label
     ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
     ctx.textAlign = "center";
     ctx.fillText(rooms[gameState.room].name, CANVAS_BASE_W/2, 32);
-    // Dialog box (HTML)
-    // --- Next frame ---
     requestAnimationFrame(gameLoop);
   }
 
