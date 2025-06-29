@@ -67,7 +67,7 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // ==== AAA Mobile Controls, Reliable Movement, Attack, and Double Jump ====
+  // ==== ZETA: Descent into Void - Procedural Level + Working Enemies ====
 
   // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
@@ -76,11 +76,13 @@
   const PLAYER_SPEED = 1.7;
   const PLAYER_JUMP = 3.8;
   const GRAVITY = 0.18;
-  const ROOM_BG = "#1a001a";
-  const FOG_COLOR = "rgba(40,0,40,0.13)";
+  const ENEMY_SPEED = 0.7;
+  const ENEMY_DAMAGE = 1;
   const font = "'Press Start 2P', monospace";
+  const MAX_HP = 6;
   let dialogActive = false;
   let attackTimer = 0;
+  let gameOver = false;
 
   // --- Canvas / Context ---
   const canvas = document.getElementById('gameCanvas');
@@ -139,7 +141,62 @@
   showControlsIfMobile();
   window.addEventListener("resize", showControlsIfMobile);
 
-  // --- Simple Assets (drawn, no images) ---
+  // --- Procedural Level Generation ---
+  function generateRoom(width=20, height=9) {
+    let map = Array(height).fill().map(()=>Array(width).fill(' '));
+    for(let x=0; x<width; x++) { map[0][x]='='; map[height-1][x]='='; }
+    for(let y=0; y<height; y++) { map[y][0]='='; map[y][width-1]='='; }
+    // Place floor
+    for(let x=1; x<width-1; x++) map[height-2][x]='=';
+    // Add random platforms
+    for(let i=0; i<4; i++) {
+      let px = 2+Math.floor(Math.random()*(width-6));
+      let py = 2+Math.floor(Math.random()*(height-4));
+      for(let j=0; j<3+Math.floor(Math.random()*2); j++)
+        if(px+j<width-1) map[py][px+j]='=';
+    }
+    // Place door (always on right side)
+    let doorX = width-2, doorY = height-3;
+    map[doorY][doorX] = '+';
+    // Place a few enemies on platforms or floor
+    let enemyList = [];
+    let placed = 0;
+    while(placed < 3) {
+      let ex = 2+Math.floor(Math.random()*(width-4));
+      let ey = 1+Math.floor(Math.random()*(height-4));
+      if (map[ey][ex] === ' ' && (map[ey+1][ex] === '=')) {
+        map[ey][ex]='*';
+        enemyList.push({x:ex*TILE, y:ey*TILE, vx:ENEMY_SPEED*(Math.random()<0.5?-1:1), vy:0, dir:Math.random()<0.5?-1:1, dead:false});
+        placed++;
+      }
+    }
+    // Place NPC or lore
+    map[2][2]='n'; map[2][width-3]='@';
+    return {map: map.map(row=>row.join('')), enemies: enemyList, door: {x:doorX, y:doorY}};
+  }
+
+  // --- Rooms ---
+  let autogenRoom = generateRoom();
+  let rooms = {
+    autogen: {
+      name: "Procedural Room",
+      map: autogenRoom.map,
+      doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
+      bg: "#181035"
+    }
+  };
+
+  // --- Game State ---
+  let gameState = {
+    room: "autogen",
+    player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
+    dialog: null,
+    enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
+    notes: [],
+    corruption: 0
+  };
+
+  // --- Drawing ---
   function drawTile(ch, x, y) {
     if (ch === '=' || ch === '|') {
       ctx.fillStyle = ch === '=' ? "#4b236c" : "#33103c";
@@ -170,57 +227,6 @@
       ctx.fillRect(x+6, y+7, 4, 2);
     }
   }
-
-  // --- Game World ---
-  const rooms = {
-    sanctum: {
-      name: "Sanctum of 🜲",
-      map: [
-        "====================",
-        "=                  =",
-        "=   n        @     =",
-        "=                  =",
-        "=        *         =",
-        "=     ===+===      =",
-        "=                  =",
-        "=                  =",
-        "====================",
-      ],
-      doors: [
-        { x: 10, y: 5, target: "voidhall", tx: 2, ty: 6 }
-      ],
-      bg: "#1a001a"
-    },
-    voidhall: {
-      name: "Hall of the Void",
-      map: [
-        "====================",
-        "=                  =",
-        "=   *          *   =",
-        "=                  =",
-        "=        @         =",
-        "=   ===+===        =",
-        "=                  =",
-        "=                  =",
-        "====================",
-      ],
-      doors: [
-        { x: 7, y: 5, target: "sanctum", tx: 10, ty: 6 }
-      ],
-      bg: "#170020"
-    }
-  };
-
-  // --- Player should start ON TOP of floor, not inside ---
-  // Add jumpCount for double jump
-  let gameState = {
-    room: "sanctum",
-    player: {x: 32, y: 64, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false, jumpCount: 0},
-    dialog: null,
-    enemies: [],
-    notes: [],
-    corruption: 0
-  };
 
   function drawPlayer(x, y, facing, attacking, attackFrame) {
     ctx.save();
@@ -268,6 +274,7 @@
     }
   }
 
+  // --- Dialog System ---
   const dialogDiv = document.getElementById("dialog");
   function showDialog(text, choices) {
     dialogActive = true;
@@ -318,6 +325,7 @@
     }
   });
 
+  // --- Input ---
   let keys = {};
   window.addEventListener("keydown", e => {
     keys[e.key.toLowerCase()]=true;
@@ -333,13 +341,28 @@
     }
   }
 
+  // --- Main Game Loop ---
   function gameLoop() {
     let p = gameState.player;
+    if(gameOver) {
+      ctx.fillStyle="#000b";
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.font = "bold 28px "+font;
+      ctx.fillStyle="#f44";
+      ctx.textAlign="center";
+      ctx.fillText("GAME OVER", CANVAS_BASE_W/2, CANVAS_BASE_H/2);
+      ctx.font = "bold 16px "+font;
+      ctx.fillStyle="#fff";
+      ctx.fillText("Tap R to restart", CANVAS_BASE_W/2, CANVAS_BASE_H/2+32);
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+
     let left = keys['arrowleft']||keys['a']||controlsState.left;
     let right = keys['arrowright']||keys['d']||controlsState.right;
     let jump = keys['arrowup']||keys['w']||controlsState.jump;
 
-    // DOUBLE JUMP LOGIC:
+    // DOUBLE JUMP LOGIC
     if (!dialogActive) {
       if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
@@ -353,7 +376,7 @@
         controlsState.jump = false; // Prevent holding jump
       }
       if (controlsState.attack) { startAttack(); controlsState.attack = false; }
-      if (controlsState.interact) { /* (interact logic here if needed) */ controlsState.interact = false; }
+      if (controlsState.interact) { /* interact logic here if needed */ controlsState.interact = false; }
     } else {
       p.vx = 0;
     }
@@ -365,7 +388,6 @@
     col = collideWithMap(p.x, nextY);
     if (!col.y) {
       p.y = nextY; 
-      // Check if we just left the ground
       if (p.onGround) { p.onGround = false; }
     } else {
       p.vy = 0; 
@@ -375,11 +397,57 @@
       }
     }
 
+    // --- Enemy logic ---
+    for(let e of gameState.enemies) {
+      if(e.dead) continue;
+      // Patrol: Turn if edge or wall
+      let ex = e.x/TILE, ey = e.y/TILE;
+      let nx = Math.floor((e.x+e.dir*ENEMY_SPEED*12)/TILE);
+      // Only move if platform in front
+      let below = charAt(nx, ey+1);
+      let front = charAt(nx, ey);
+      if((below==='='||below==='|') && (front===' '||front==='*')) {
+        e.x += e.vx;
+      } else {
+        e.dir *= -1;
+        e.vx = ENEMY_SPEED*e.dir;
+      }
+      // --- Attack by player (attack hitbox)
+      if(p.attacking && attackTimer>0) {
+        let ax = p.facing>0 ? p.x+18 : p.x-2;
+        let ay = p.y+8;
+        if(Math.abs(ax-e.x-8)<14 && Math.abs(ay-e.y-8)<14) {
+          e.dead=true;
+        }
+      }
+      // --- Damage player on contact (if not invulnerable)
+      if(!p.invuln && !e.dead && Math.abs(p.x-e.x)<14 && Math.abs(p.y-e.y)<14) {
+        p.hp -= ENEMY_DAMAGE;
+        p.invuln = 30; // 0.5s
+        if(p.hp<=0) {
+          p.hp = 0; gameOver = true;
+        }
+      }
+    }
+    if(p.invuln) p.invuln--;
+
+    // --- Door/level generation ---
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
     if (door && !dialogActive) {
-      let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
-      if (d) switchRoom(d.target, d.tx, d.ty, p.hp);
+      // Generate new room every time!
+      let newRoom = generateRoom();
+      rooms["autogen"] = {
+        name: "Procedural Room",
+        map: newRoom.map,
+        doors: [ { x: newRoom.door.x, y: newRoom.door.y, target: "autogen", tx: 1, ty: newRoom.door.y } ],
+        bg: "#181035"
+      };
+      switchRoom("autogen", 1, newRoom.door.y, p.hp);
+      gameState.enemies = JSON.parse(JSON.stringify(newRoom.enemies));
+      return requestAnimationFrame(gameLoop);
     }
+
+    // --- NPC/Lore Interact ---
     if ((keys['e']||controlsState.interact) && !dialogActive) {
       let tx = Math.floor((p.x+8)/TILE), ty = Math.floor((p.y+8)/TILE);
       let sym = charAt(tx, ty-1);
@@ -392,21 +460,29 @@
       if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
       controlsState.interact = false;
     }
+
     if (p.attacking) {
       attackTimer--;
       if (attackTimer<=0) { p.attacking = false; attackTimer = 0; }
     }
+
+    // --- Render ---
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.fillStyle = rooms[gameState.room].bg;
     ctx.fillRect(0,0,canvas.width,canvas.height);
     ctx.globalAlpha = 0.14+Math.random()*0.04;
-    ctx.fillStyle = FOG_COLOR;
+    ctx.fillStyle = "#312045";
     ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
     let map = rooms[gameState.room].map;
     for (let y=0;y<map.length;y++)
       for (let x=0;x<map[0].length;x++)
         drawTile(map[y][x], x*TILE, y*TILE);
-    drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
+    // Enemies
+    for(let e of gameState.enemies) if(!e.dead)
+      drawTile('*', e.x, e.y);
+    // Player
+    if(!p.invuln || (p.invuln%4<2))
+      drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
     drawHearts(p.hp);
     ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
     ctx.textAlign = "center";
@@ -435,10 +511,36 @@
     gameState.room = name;
     gameState.player.x = tx*TILE;
     gameState.player.y = ty*TILE;
-    gameState.player.hp = hp||6;
+    gameState.player.hp = hp||MAX_HP;
     gameState.player.vy = 0;
     gameState.player.jumpCount = 0;
+    gameState.player.invuln = 0;
+    gameState.player.attacking = false;
   }
+
+  // --- Restart on Game Over ---
+  window.addEventListener("keydown", function(e){
+    if(gameOver && (e.key==="r"||e.key==="R")) {
+      let autogenRoom = generateRoom();
+      rooms = {
+        autogen: {
+          name: "Procedural Room",
+          map: autogenRoom.map,
+          doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
+          bg: "#181035"
+        }
+      };
+      Object.assign(gameState, {
+        room: "autogen",
+        player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
+        dialog: null,
+        enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
+        notes: [],
+        corruption: 0
+      });
+      gameOver = false;
+    }
+  });
 
   showDialog("Welcome to ZETA: Descent into Void");
   requestAnimationFrame(gameLoop);
