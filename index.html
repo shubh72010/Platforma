@@ -3,110 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <title>ZETA: Descent into Void</title>
-  <!-- Kaboom.js CDN -->
-  <script src="https://unpkg.com/kaboom/dist/kaboom.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      overflow: hidden;
-      background: #1a001a;
-      touch-action: none;
-    }
-    body {
+    html, body {margin:0;height:100%;overflow:hidden;background:#1a001a;}
+    body {width:100vw;height:100vh;}
+    #gameCanvas {
+      display: block;
       width: 100vw;
       height: 100vh;
-      overscroll-behavior: none;
-    }
-    #game {
-      width: 100vw;
-      height: 100vh;
-      display: block;
-      outline: none;
-      image-rendering: pixelated;
-      position: relative;
-    }
-    canvas {
-      display: block;
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      image-rendering: pixelated;
       background: #1a001a;
+      image-rendering: pixelated;
       touch-action: none;
     }
-    /* Dialog box styling */
-    .dialog-box {
+    .dialog {
       font-family: 'Press Start 2P', monospace;
-      background: rgba(20,0,30,0.97);
+      background: rgba(20,0,30,0.96);
       color: #fff;
       border: 2px solid #5c1a5c;
-      padding: 12px 16px;
       position: absolute;
-      left: 50%;
-      bottom: 24px;
-      transform: translateX(-50%);
-      min-width:      max-width: 94vw;
+      left: 50%; bottom: 24px; transform: translateX(-50%);
+      min-width: 220px; max-width: 90vw;
+      padding: 12px 16px;
       z-index: 10;
-      font-size: 16px;
-      letter-spacing: 1px;
-      border-radius: 6px;
-      pointer-events: auto;
-      box-sizing: border-box;
-      box-shadow: 0 0 12px 2px #000;
-      transition: font-size 0.2s;
+      font-size: 14px;
+      border-radius: 8px;
+      box-shadow: 0 0 12px #000a;
+      display: none;
       user-select: none;
-    }
-    /* Dialog font size for mobile */
-    @media (max-width: 700px) {
-      .dialog-box { font-size: 20px; min-width: 60vw; }
+      pointer-events: auto;
     }
     /* On-screen controls for mobile */
     .controls {
-      display: none;
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 100;
-      gap: 14px;
-      pointer-events: none;
-      width: 100vw;
-      justify-content: center;
+      display: none; position: absolute; bottom: 18px; left: 50%; transform:translateX(-50%);
+      z-index: 20; gap: 12px; width: 100vw; justify-content: center;
     }
     .controls button {
-      width: 56px;
-      height: 56px;
+      width: 54px; height: 54px;
       background: #330033cc;
       border: 2px solid #5c1a5c;
-      border-radius: 12px;
-      color: #fff;
-      font-size: 32px;
-      font-family: inherit;
-      margin: 0 4px;
-      user-select: none;
-      outline: none;
-      transition: background 0.13s, box-shadow 0.13s, color 0.13s;
-      box-shadow: 0 2px 12px 0 #0004;
+      border-radius: 10px;
+      color: #fff; font-size: 32px; font-family: inherit;
+      margin: 0 4px; user-select: none; outline: none;
+      box-shadow: 0 2px 12px 0 #0006;
       pointer-events: auto;
       touch-action: none;
+      transition: filter 0.12s, background 0.12s;
     }
-    .controls button.pressed, .controls button:active {
-      background: #6622aa !important;
-      box-shadow: 0 0 18px 3px #c0a0ff, 0 0 0 2px #c0a0ff;
-      color: #fff;
-      filter: brightness(1.2);
-    }
+    .controls button.pressed { background: #6622aa; filter: brightness(1.25); }
     @media (max-width: 700px) {
       .controls { display: flex; }
+      .dialog { font-size: 18px; min-width: 50vw;}
     }
   </style>
 </head>
 <body>
-  <div id="game"></div>
-  <div id="dialog" class="dialog-box" style="display:none"></div>
+  <canvas id="gameCanvas" width="320" height="180"></canvas>
+  <div class="dialog" id="dialog"></div>
   <div class="controls" id="controls">
     <button id="btn-left">&#8592;</button>
     <button id="btn-right">&#8594;</button>
@@ -114,46 +67,96 @@
     <button id="btn-attack">&#9935;</button>
     <button id="btn-interact">E</button>
   </div>
-  <script type="module">
-  // ZETA: Descent into Void - Full Mobile-Polished Kaboom.js Game
+  <script>
+  // === ZETA: Descent into Void — Pure Canvas Version ===
 
-  // --- K320,
-    height: 180,
-    canvas: document.createElement('canvas'),
-    root: document.getElementById('game'),
-    scale: 3,
-    background: [26, 0, 26],
-    crisp: true,
-    font: "sinko",
-    pixelDensity: 2,
-  });
+  // --- Config ---
+  const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
+  const TILE = 16;
+  const PLAYER_SIZE = 16;
+  const PLAYER_SPEED = 1.3;
+  const PLAYER_JUMP = 3.8;
+  const GRAVITY = 0.18;
+  const ROOM_BG = "#1a001a";
+  const FOG_COLOR = "rgba(40,0,40,0.13)";
+  const FPS = 60;
+  const font = "'Press Start 2P', monospace";
+  let dialogActive = false;
 
-  // --- CONSTANTS & STATE ---
-  const ROOM_BG = [26, 0, 26];
-  const PLAYER_SPEED = 90;
-  const PLAYER_JUMP_FORCE = 240;
-  const PLAYER_HP_MAX = 6;
-  const ENEMY_HP = 2;
-  const TILE_SIZE = 16;
-  let corruption = 0;
+  // --- Canvas / Context ---
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let scale = 1;
 
-  // --- ASSET DEFINITIONS ---
-  loadSprite("flakious", genPlayerSprite());
-  loadSprite("cultist", genEnemySprite());
-  loadSprite("door", genDoorSprite());
-  loadSprite("npc", genNpcSprite());
-  loadSprite("terminal", genTerminalSprite());
-  loadSprite("heart", genHeartSprite());
-  loadSprite("sigil", genSigilSprite());
-  loadSound("jump", genBeep(300, 0.1));
-  loadSound("attack", genBeep(80, 0.12));
-  loadSound("hit", genBeep(180, 0.09));
-  loadSound("death", genBeep(60, 0.18));
-  loadSound("dialog", genBeep(400, 0.05));
-  loadSound("music", genMelody());
+  // --- Mobile Controls State ---
+  let isMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) || window.innerWidth < 700;
+  document.getElementById("controls").style.display = isMobile ? "flex" : "none";
+  let mobileLeft = false, mobileRight = false, mobileJump = false, mobileAttack = false, mobileInteract = false;
+  function bindMobileControls() {
+    const ids = {
+      btnLeft: 'mobileLeft',
+      btnRight: 'mobileRight',
+      btnJump: 'mobileJump',
+      btnAttack: 'mobileAttack',
+      btnInteract: 'mobileInteract'
+    };
+    Object.entries(ids).forEach(([btn, flag]) => {
+      const el = document.getElementById(btn.replace(/^btn/,'btn-').toLowerCase());
+      el.addEventListener("touchstart", e => { e.preventDefault(); window[flag]=true; el.classList.add("pressed"); }, {passive:false});
+      el.addEventListener("touchend", e => { e.preventDefault(); window[flag]=false; el.classList.remove("pressed"); }, {passive:false});
+      el.addEventListener("touchcancel", e => { window[flag]=false; el.classList.remove("pressed"); });
+    });
+  }
+  bindMobileControls();
 
-  // --- ROOMS ---
-  const ROOMS = {
+  // --- Responsive Canvas ---
+  function resizeCanvas() {
+    const w = window.innerWidth, h = window.innerHeight;
+    scale = Math.floor(Math.min(w/CANVAS_BASE_W, h/CANVAS_BASE_H));
+    canvas.style.width = (CANVAS_BASE_W*scale)+"px";
+    canvas.style.height = (CANVAS_BASE_H*scale)+"px";
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = `translate(-50%, -50%) scale(1)`;
+    document.body.style.overflow = "hidden";
+  }
+  window.addEventListener("resize", resizeCanvas); resizeCanvas();
+
+  // --- Simple Assets (drawn, no images) ---
+  function drawTile(ch, x, y) {
+    if (ch === '=' || ch === '|') { // Wall/floor
+      ctx.fillStyle = ch === '=' ? "#4b236c" : "#33103c";
+      ctx.fillRect(x, y, TILE, TILE);
+    } else if (ch === '+') { // Door
+      ctx.strokeStyle = "#a0a";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x+2, y+2, TILE-4, TILE-4);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+    } else if (ch === '*') { // Cultist enemy
+      ctx.fillStyle = "#a01034";
+      ctx.fillRect(x+2, y+4, 12, 10);
+      ctx.fillStyle = "#f33";
+      ctx.fillRect(x+5, y+7, 2, 2);
+      ctx.fillRect(x+9, y+7, 2, 2);
+    } else if (ch === 'n') { // NPC
+      ctx.fillStyle = "#4060c0";
+      ctx.fillRect(x+2, y+2, 12, 13);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(x+6, y+5, 4, 4);
+      ctx.fillStyle = "#0ef";
+      ctx.fillRect(x+7, y+7, 2, 2);
+    } else if (ch === '@') { // Terminal/lore
+      ctx.fillStyle = "#333";
+      ctx.fillRect(x+3, y+6, 10, 6);
+      ctx.fillStyle = "#0f0";
+      ctx.fillRect(x+6, y+7, 4, 2);
+    }
+  }
+
+  // --- Game World ---
+  const rooms = {
     sanctum: {
       name: "Sanctum of 🜲",
       map: [
@@ -170,7 +173,7 @@
       doors: [
         { x: 10, y: 5, target: "voidhall", tx: 2, ty: 6 }
       ],
-      bg: [26,0,26],
+      bg: "#1a001a"
     },
     voidhall: {
       name: "Hall of the Void",
@@ -188,477 +191,206 @@
       doors: [
         { x: 7, y: 5, target: "sanctum", tx: 10, ty: 6 }
       ],
-      bg: [18,0,28],
+      bg: "#170020"
     }
   };
 
-  // --- SPRITE GENERATORS (DATA URLS) ---
-  function genPlayerSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
+  let gameState = {
+    room: "sanctum",
+    player: {x: 32, y: 110, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1},
+    dialog: null, // {text:[], idx, chars, choices}
+    enemies: [],
+    notes: [],
+    corruption: 0
+  };
+
+  // --- Player Drawing ---
+  function drawPlayer(x, y) {
+    ctx.save();
+    ctx.translate(x+PLAYER_SIZE/2, y+PLAYER_SIZE/2);
+    ctx.scale(gameState.player.facing,1);
     ctx.fillStyle = "#c0a0ff";
-    ctx.fillRect(4, 2, 8, 12);
+    ctx.fillRect(-8, -8, 16, 16);
     ctx.fillStyle = "#fff";
-    ctx.fillRect(6, 4, 4, 4);
-    return c;
-  }
-  function genEnemySprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = "#a01034";
-    ctx.fillRect(4, 4, 8, 8);
-    ctx.fillStyle = "#f33";
-    ctx.fillRect(6, 6, 2, 2);
-    ctx.fillRect(8, 6, 2, 2);
-    return c;
-  }
-  function genDoorSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = "#333";
-    ctx.fillRect(4, 4, 8, 10);
-    ctx.strokeStyle = "#a0a";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(4, 4, 8, 10);
-    return c;
-  }
-  function genNpcSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = "#4060c0";
-    ctx.fillRect(4, 2, 8, 12);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(6, 4, 4, 4);
-    ctx.fillStyle = "#0ef";
-    ctx.fillRect(7, 6, 2, 2);
-    return c;
-  }
-  function genTerminalSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = "#333";
-    ctx.fillRect(3, 6, 10, 6);
-    ctx.fillStyle = "#0f0";
-    ctx.fillRect(6, 7, 4, 2);
-    return c;
-  }
-  function genHeartSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = "#f33";
-    ctx.beginPath();
-    ctx.moveTo(8, 6); ctx.bezierCurveTo(8,4,4,4,4,8);
-    ctx.bezierCurveTo(4,12,8,14,8,14);
-    ctx.bezierCurveTo(8,14,12,12,12,8);
-    ctx.bezierCurveTo(12,4,8,4,8,6);
-    ctx.fill();
-    return c;
-  }
-  function genSigilSprite() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 16;
-    const ctx = c.getContext('2d');
-    ctx.strokeStyle = "#b7a3ff";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(2, 8);
-    ctx.lineTo(14, 8);
-    ctx.moveTo(4, 6);
-    ctx.lineTo(12, 10);
-    ctx.moveTo(4, 10);
-    ctx.lineTo(12, 6);
-    ctx.stroke();
-    return c;
-  }
-  function genBeep(freq = 400, dur = 0.1) {
-    return "data:audio/wav;base64,UklGRhQAAABXQVZFZm10IBAAAAABAAEARKwAABCxAgAEABAAZGF0YYQAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA==";
-  }
-  function genMelody() {
-    return "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YYQAAAAA";
-  }
-
-  // --- PARTICLE EFFECTS ---
-  function spawnMist(pos) {
-    for (let i = ++) {
-      add([
-        pos.clone().add(rand(-4,4), rand(-4,4)),
-        rect(2,2),
-        color(180,120,255),
-        opacity(0.18),
-        z(100),
-        "particle",
-        lifespan(0.2, 0.4)
-      ]);
-    }
-  }
-  function spawnGlitch(pos, color = rgb(255,0,100)) {
-    for (let i = 0; i < 6; i++) {
-      add([
-        pos.clone().add(rand(-6,6), rand(-6,6)),
-        rect(rand(2,4), rand(2,4)),
-        color,
-        opacity(0.8),
-        z(110),
-        move(vec2(rand(-1,1), rand(-1,1)), rand(60,120)),
-        lifespan(0.3, 0.7),
-        "particle"
-      ]);
+    ctx.fillRect(-4, -4, 8, 8);
+    ctx.restore();
+    // Particle trail
+    if (Math.random()<0.5) {
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = "#c0a0ff";
+      ctx.beginPath();
+      ctx.arc(x+8+Math.random()*4-2, y+16, 2+Math.random()*2, 0, 6.29);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
 
-  // --- UI: HEARTS ---
+  // --- Draw Hearts/Corruption Meter ---
   function drawHearts(hp) {
-    destroyAll("ui");
-    for (let i = 0; i < Math.ceil(hp/2); i++) {
-      add([
-        sprite("heart"),
-        pos(12 + i*18, 12),
-        z(200),
-        scale(1),
-        "ui"
-      ]);
+    for (let i=0; i<Math.ceil(hp/2); i++) {
+      ctx.fillStyle = "#f33";
+      ctx.beginPath();
+      ctx.moveTo(20+i*18, 17); ctx.bezierCurveTo(20+i*18,11,12+i*18,11,12+i*18,17);
+      ctx.bezierCurveTo(12+i*18,23,20+i*18,27,20+i*18,27);
+      ctx.bezierCurveTo(20+i*18,27,28+i*18,23,28+i*18,17);
+      ctx.bezierCurveTo(28+i*18,11,20+i*18,11,20+i*18,17);
+      ctx.fill();
     }
   }
 
-  // --- DIALOG SYSTEM ---
-  const dialogBox = document.getElementById("dialog");
-  let dialogActive = false;
-  let dialogResolve = null;
-  let dialogChoices = null;
-  let dialogNext = null;
-
-  function showDialog(lines, choices = null) {
+  // --- Dialog System ---
+  const dialogDiv = document.getElementById("dialog");
+  function showDialog(text, choices) {
     dialogActive = true;
-    dialogBox.style.display = "block";
-    dialogBox.innerHTML = "";
-    if (typeof lines === "string") lines = [lines];
-    let idx = 0;
-    let chars = 0;
-    let fullText = '';
-    dialogNext = null;
-    dialogChoices = choices;
-
+    dialogDiv.style.display = "block";
+    if (typeof text === "string") text = [text];
+    let idx = 0, ci = 0, lines = text, fullText = '';
     function typeLine() {
       if (idx >= lines.length) {
         if (choices) {
-          dialogBox.innerHTML += "<br><br>";
-          choices.forEach((c, i) => {
-            dialogBox.innerHTML += `<span style="color:#c0f">${i+1}. ${c[0]}</span><br>`;
-          });
-          dialogNext = () => {};
+          dialogDiv.innerHTML += "<br><br>";
+          choices.forEach((c, i) => dialogDiv.innerHTML += `<span style="color:#c0f">${i+1}. ${c[0]}</span><br>`);
+          dialogDiv.onclick = null;
         } else {
-          dialogNext = () => { hideDialog(); };
+          dialogDiv.onclick = hideDialog;
         }
         return;
       }
-      let line = lines[idx];
-      let out = "";
-      let ci = 0;
+      let line = lines[idx], out = '';
       function tick() {
         if (ci < line.length) {
           out += line[ci];
-          dialogBox.innerHTML = fullText + out + "<span style='opacity:0.3'>_</span>";
-          play("dialog");
+          dialogDiv.innerHTML = fullText + out + "<span style='opacity:0.3'>_</span>";
           ci++;
-          setTimeout(tick, 28);
+          setTimeout(tick, 22);
         } else {
-          fullText += out + "<br>";
-          idx++;
-          setTimeout(typeLine, 220);
+          fullText += out+"<br>"; idx++; ci=0;
+          setTimeout(typeLine, 160);
         }
       }
       tick();
     }
+    dialogDiv.onclick = hideDialog;
     typeLine();
   }
   function hideDialog() {
     dialogActive = false;
-    dialogBox.style.display = "none";
-    dialogNext = null;
-    dialogChoices = null;
-    dialogResolve?.();
-    dialogResolve = null;
+    dialogDiv.style.display = "none";
+    dialogDiv.onclick = null;
   }
-  // Handle dialog advance and choices (keyboard)
-  document.addEventListener("keydown", (e) => {
+  // Choices (tap/click)
+  dialogDiv.addEventListener("click", e => {
     if (!dialogActive) return;
-    if (dialogChoices && ["1","2","3","4"].includes(e.key)) {
-      const idx = parseInt(e.key)-1;
-      dialogChoices[idx][1]();
-      hideDialog();
-    } else if (!dialogChoices) {
-      dialogNext?.();
-      hideDialog();
+    if (gameState.dialog && gameState.dialog.choices) {
+      let y = e.offsetY, idx = Math.floor((y-60)/28);
+      if (gameState.dialog.choices[idx]) {
+        gameState.dialog.choices[idx][1]();
+        hideDialog();
+      }
     }
   });
-  // --- DIALOG: Tap to advance on mobile ---
-  dialogBox.addEventListener("touchstart", e => {
-    if (dialogActive && dialogNext) dialogNext();
-  }, {passive:false});
 
-  // --- MOBILE INPUT FLAGS ---
-  let mobileLeft = false, mobileRight = false, mobileJump = false, mobileAttack = false, mobileInteract = false;
-  let isMobile = false;
+  // --- Input ---
+  let keys = {};
+  window.addEventListener("keydown", e => keys[e.key.toLowerCase()]=true);
+  window.addEventListener("keyup", e => keys[e.key.toLowerCase()]=false);
 
-  // --- DEVICE DETECTION ---
-  function detectMobile() {
-    isMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent)
-      || window.innerWidth < 700;
-    document.getElementById("controls").style.display = isMobile ? "flex" : "none";
-  }
-  window.addEventListener("resize", detectMobile);
-  detectMobile();
-
-  // --- BIND ON-SCREEN BUTTONS ---
-  function bindMobileControls() {
-    const btns = {
-      left: document.getElementById("btn-left"),
-      right: document.getElementById("btn-right"),
-      jump: document.getElementById("btn-jump"),
-      attack: document.getElementById("btn-attack"),
-      interact: document.getElementById("btn-interact")
-    };
-    function setup(btn, flagName) {
-      btn.addEventListener("touchstart", e => {
-        e.preventDefault();
-        window[flagName] = true;
-        btn.classList.add("pressed");
-      }, {passive:false});
-      btn.addEventListener("touchend", e => {
-        e.preventDefault();
-        window[flagName] = false;
-        btn.classList.remove("pressed");
-      }, {passive:false});
-      btn.addEventListener("touchcancel", e => {
-        window[flagName] = false;
-        btn.classList.remove("pressed");
-      });
+  // --- Main Loop ---
+  function gameLoop() {
+    // --- Update Logic ---
+    // Player input
+    let p = gameState.player;
+    let left = keys['arrowleft']||keys['a']||mobileLeft, right = keys['arrowright']||keys['d']||mobileRight;
+    let jump = keys['arrowup']||keys['w']||mobileJump;
+    if (!dialogActive) {
+      if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
+      else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
+      else p.vx = 0;
+      if (jump && p.onGround) { p.vy = -PLAYER_JUMP; mobileJump=false; }
     }
-    setup(btns.left, "mobileLeft");
-    setup(btns.right, "mobileRight");
-    setup(btns.jump, "mobileJump");
-    setup(btns.attack, "mobileAttack");
-    setup(btns.interact, "mobileInteract");
-  }
-  bindMobileControls();
-
-  // --- RESPONSIVE CANVAS SCALING ---
-  function resizeCanvas() {
-    const gameCanvas = document.querySelector("#game canvas");
-    if (!gameCanvas) return;
-    const scale = Math.floor(Math.min(window.innerWidth / 320, window.innerHeight / 180));
-    gameCanvas.style.width = (320 * scale) + "px";
-    gameCanvas.style.height = (180 * scale) + "px";
-    gameCanvas.style.position = "absolute";
-    gameCanvas.style.left = "50%";
-    gameCanvas.style.top = "50%";
-    gameCanvas.style.transform = `translate(-50%, -50%) scale(1)`;
-    gameCanvas.style.imageRendering = "pixelated";
-    document.body.style.overflow = "hidden";
-  }
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
-
-  // --- ROOM SYSTEM ---
-  function loadRoom(roomName, playerState = {}) {
-    go("game", { room: roomName, playerState });
-    resizeCanvas();
-  }
-
-  // --- MAIN GAME SCENE ---
-  scene("game", ({ room, playerState }) => {
-    setBackground(ROOMS[room].bg || ROOM_BG);
-    loop(0.09, () => {
-      if (rand() < 0.25) {
-        add([rect(width(), height()), color(255,255,255), opacity(rand(0.01,0.04)), z(300), lifespan(0.09)]);
-      }
-    });
-    add([rect(width(),height()), color(40,0,40), opacity(0.14), z(150)]);
-    const curRoom = ROOMS[room];
-    const level = addLevel(curRoom.map, {
-      width: TILE_SIZE,
-      height: TILE_SIZE,
-      pos: vec2(0, 0),
-      tiles: {
-        "=": () => [rect(TILE_SIZE,TILE_SIZE), area(), solid(), color(60,20,80)],
-        "|": () => [rect(TILE_SIZE,TILE_SIZE), area(), solid(), color(40,10,40)],
-        "+": () => [sprite("door"), area(), "door"],
-        "n": () => [sprite("npc"), area(), "npc", {name:"Elder"}, "interactable"],
-        "*": () => [sprite("cultist"), area(), "enemy", {hp: ENEMY_HP}, body()],
-        "@": () => [sprite("terminal"), area(), "terminal", "interactable"],
-        " ": () => [],
-      }
-    });
-    let startX = playerState.x || 32, startY = playerState.y || 120;
-    if (playerState.tx != null && playerState.ty != null) {
-      startX = playerState.tx * TILE_SIZE;
-      startY = playerState.ty * TILE_SIZE;
+    // Gravity
+    p.vy += GRAVITY;
+    // Move player
+    let newX = p.x + p.vx, newY = p.y + p.vy;
+    // Collisions (walls)
+    let col = collideWithMap(newX, newY);
+    p.onGround = false;
+    if (col.y) { p.vy = 0; if (p.vy > 0) p.onGround = true; }
+    if (!col.x) p.x = newX; else p.vx = 0;
+    if (!col.y) p.y = newY; else p.vy = 0;
+    // Door/room
+    let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
+    if (door && !dialogActive) {
+      let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
+      if (d) switchRoom(d.target, d.tx, d.ty, p.hp);
     }
-    const player = add([
-      sprite("flakious"),
-      pos(startX, startY),
-      area({shape: new Rect(vec2(0), TILE_SIZE, TILE_SIZE)}),
-      body(),
-      z(10),
-      "player",
-      { speed: PLAYER_SPEED, hp: playerState.hp || PLAYER_HP_MAX, anim: 0, onGround: false }
-    ]);
-    player.play("idle");
-    let walkFrame = 0;
-    let animTimer = 0;
-    player.onUpdate(() => {
-      const moving = keyIsDown("left") || keyIsDown("right") || keyIsDown("a") || keyIsDown("d") || mobileLeft || mobileRight;
-      animTimer += dt();
-      if (moving && animTimer > 0.16) {
-        walkFrame = 1 - walkFrame;
-        player.use(sprite("flakious"));
-        animTimer = 0;
-      }
-    });
-    onUpdate(() => { camPos(player.pos.x, player.pos.y); });
-    onUpdate(() => {
-      if (player.isMoving()) if (rand() < 0.5) spawnMist(player.pos.add(0, TILE_SIZE-2));
-    });
-    drawHearts(player.hp);
-    add([
-      text(curRoom.name, { size: 16, font: "sinko" }),
-      pos(center().x - textWidth(curRoom.name, 16)/2, 32),
-      color(220,180,255),
-      z(300),
-      lifespan(2.4),
-    ]);
-    player.onCollide("door", (d) => {
-      for (const door of curRoom.doors) {
-        if (d.gridPos?.x === door.x && d.gridPos?.y === door.y) {
-          loadRoom(door.target, { tx: door.tx, ty: door.ty, hp: player.hp });
-          break;
-        }
-      }
-    });
-
-    // --- SMART INPUT HANDLING (per frame) ---
-    onUpdate(() => {
-      if (dialogActive) return;
-      let vel = 0;
-      if (keyIsDown("left") || keyIsDown("a") || mobileLeft) vel -= 1;
-      if (keyIsDown("right") || keyIsDown("d") || mobileRight) vel += 1;
-      player.move(vel * PLAYER_SPEED, 0);
-      if ((mobileJump || keyIsDown("up") || keyIsDown("w")) && player.isGrounded()) {
-        player.jump(PLAYER_JUMP_FORCE);
-        play("jump");
-        mobileJump = false;
-      }
-      if (mobileAttack) { playerAttack(); mobileAttack = false; }
-      if (mobileInteract) { tryInteract(); mobileInteract = false; }
-    });
-
-    // --- INTERACTION SYSTEM ---
-    function tryInteract() {
-      const nearby = get("interactable").find(ent => ent.pos.dist(player.pos) < 32);
-      if (nearby) {
-        if (nearby.is("npc")) { startNpcDialog(nearby); }
-        else if (nearby.is("terminal")) { showDialog(["Day 17: Flakious spoke through the void."]); }
-      }
-    }
-    function startNpcDialog(npc) {
-      showDialog(
-        [
-          "We waited for you, 🜲.",
-          "The unbelievers are near."
-        ],
-        [
-          ["Accept the truth", () => { showDialog("A strange energy fills the air..."); corruption++; }],
+    // Interact (E/btn)
+    if ((keys['e']||mobileInteract) && !dialogActive) {
+      let tx = Math.floor((p.x+8)/TILE), ty = Math.floor((p.y+8)/TILE);
+      let sym = charAt(tx, ty-1);
+      if (sym==='n') {
+        showDialog(["We waited for you, 🜲.","The unbelievers are near."], [
+          ["Accept the truth", () => { showDialog("A strange energy fills the air..."); gameState.corruption++; }],
           ["Walk away", () => {}]
-        ]
-      );
-    }
-
-    // --- ENEMY AI ---
-    every("enemy", (e) => {
-      if (e.dead) return;
-      let dir = e.dir ?? 1;
-      e.dir = dir;
-      e.move(dir * 28, 0);
-      if (e.isColliding()) e.dir = -dir;
-    });
-
-    // --- ENEMY DAMAGE ---
-    player.onCollide("enemy", (e) => {
-      if (player.hp > 0) {
-        player.hp--;
-        drawHearts(player.hp);
-        play("hit");
-        if (player.hp <= 0) {
-          play("death");
-          go("gameover");
-        }
+        ]);
       }
-    });
-
-    // --- PLAYER ATTACK ---
-    function playerAttack() {
-      play("attack");
-      const shot = add([
-        sprite("sigil"),
-        pos(player.pos.x + (player.flipX?-12:12), player.pos.y+2),
-        area(),
-        move(player.flipX?-1:1, 280),
-        lifespan(0.22),
-        "player_attack"
-      ]);
-      add([
-        rect(18,2), color(170,130,255), pos(player.pos.x + (player.flipX? -18: 18), player.pos.y+8),
-        opacity(0.6), lifespan(0.09), z(90)
-      ]);
+      if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
+      mobileInteract = false;
     }
-    onCollide("player_attack", "enemy", (a, e) => {
-      e.hp--;
-      if (e.hp <= 0 && !e.dead) {
-        e.dead = true;
-        destroy(e);
-        spawnGlitch(e.pos, rgb(255,0,100));
-        play("death");
-      } else play("hit");
-      destroy(a);
-    });
+    // --- Render ---
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = rooms[gameState.room].bg;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    // Flicker/fog
+    ctx.globalAlpha = 0.14+Math.random()*0.04;
+    ctx.fillStyle = FOG_COLOR;
+    ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
+    // Draw map
+    let map = rooms[gameState.room].map;
+    for (let y=0;y<map.length;y++)
+      for (let x=0;x<map[0].length;x++)
+        drawTile(map[y][x], x*TILE, y*TILE);
+    // Draw player
+    drawPlayer(p.x,p.y);
+    // Draw UI
+    drawHearts(p.hp);
+    // Room label
+    ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
+    ctx.textAlign = "center";
+    ctx.fillText(rooms[gameState.room].name, CANVAS_BASE_W/2, 32);
+    // Dialog box (HTML)
+    // --- Next frame ---
+    requestAnimationFrame(gameLoop);
+  }
 
-    // --- KEYBOARD CONTROLS ---
-    onKeyPress(["up","w"], () => { if (player.isGrounded()) { player.jump(PLAYER_JUMP_FORCE); play("jump"); } });
-    onKeyPress("space", () => playerAttack());
-    onKeyPress("e", () => tryInteract());
+  // --- Map helpers ---
+  function charAt(tx,ty) {
+    let map = rooms[gameState.room].map;
+    if (tx<0||ty<0||ty>=map.length||tx>=map[0].length) return ' ';
+    return map[ty][tx];
+  }
+  function collideWithMap(nx, ny) {
+    let tx = Math.floor((nx+8)/TILE), ty = Math.floor((ny+16)/TILE);
+    let ch = charAt(tx,ty);
+    if (ch==='='||ch==='|') return {x: true, y: true};
+    return {x: false, y: false};
+  }
+  function doorAt(tx,ty) {
+    let map = rooms[gameState.room].map;
+    if (tx<0||ty<0||ty>=map.length||tx>=map[0].length) return null;
+    if (map[ty][tx]==='+') return {x:tx,y:ty};
+    return null;
+  }
+  function switchRoom(name, tx, ty, hp) {
+    gameState.room = name;
+    gameState.player.x = tx*TILE;
+    gameState.player.y = ty*TILE;
+    gameState.player.hp = hp||6;
+  }
 
-    // --- GAME LOOP FX ---
-    loop(0.25, () => {});
-
-    // --- CANVAS SCALE ON ROOM LOAD ---
-    resizeCanvas();
-  });
-
-  // --- GAME OVER SCENE ---
-  scene("gameover", () => {
-    add([rect(width(),height()), color(0,0,0), opacity(0.8)]);
-    add([
-      text("You have fallen", { size: 32 }),
-      pos(center().sub(120,40)),
-      color(255,80,120),
-    ]);
-    add([
-      text("Press R to return", { size: 18 }),
-      pos(center().add(-90,40)),
-      color(220,220,255),
-    ]);
-    onKeyPress("r", () => loadRoom("sanctum", { hp: PLAYER_HP_MAX }));
-  });
-
-  // --- START GAME ---
-  play("music", { loop: true, volume: 0.16 });
-  loadRoom("sanctum");
+  // --- Game Boot ---
+  showDialog("Welcome to ZETA: Descent into Void");
+  requestAnimationFrame(gameLoop);
 
   </script>
 </body>
