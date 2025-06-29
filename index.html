@@ -573,24 +573,24 @@
     gameState.collectibles = JSON.parse(JSON.stringify(collectibles));
   }
 
-  // --- Restart on Game Over ---
-  window.addEventListener("keydown", function(e){
-    if(gameOver && (e.key==="r"||e.key==="R")) {
-      let autogenRoom = generateRoom();
-      rooms = {
-        autogen: {
-          name: "Procedural Room",
-          map: autogenRoom.map,
-          doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
-          bg: "#181035"
-        }
-      };
-      Object.assign(gameState, {
-        room: "autogen",
-        player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
-        dialog: null,
-        enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
-        collectibles: JSON.parse(JSON.stringify(autogenRoom.      collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
+// --- Restart on Game Over ---
+window.addEventListener("keydown", function(e){
+  if(gameOver && (e.key==="r"||e.key==="R")) {
+    let autogenRoom = generateRoom();
+    rooms = {
+      autogen: {
+        name: "Procedural Room",
+        map: autogenRoom.map,
+        doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
+        bg: "#181035"
+      }
+    };
+    Object.assign(gameState, {
+      room: "autogen",
+      player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
+      dialog: null,
+      enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
+      collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
       notes: [],
       corruption: 0,
       score: 0
