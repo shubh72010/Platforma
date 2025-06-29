@@ -67,7 +67,7 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // ==== AAA Mobile Controls, Reliable Movement, and Attack ====
+  // ==== AAA Mobile Controls, Reliable Movement, Attack, and Double Jump ====
 
   // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
@@ -212,10 +212,10 @@
   };
 
   // --- Player should start ON TOP of floor, not inside ---
-  // So, set player.y = 4*TILE (row 4 = 64), i.e. just above ground tiles
+  // Add jumpCount for double jump
   let gameState = {
     room: "sanctum",
-    player: {x: 32, y: 64, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false},
+    player: {x: 32, y: 64, vx: 0, vy: 0, hp: 6, onGround: false, facing: 1, attacking: false, jumpCount: 0},
     dialog: null,
     enemies: [],
     notes: [],
@@ -338,23 +338,43 @@
     let left = keys['arrowleft']||keys['a']||controlsState.left;
     let right = keys['arrowright']||keys['d']||controlsState.right;
     let jump = keys['arrowup']||keys['w']||controlsState.jump;
+
+    // DOUBLE JUMP LOGIC:
     if (!dialogActive) {
       if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
       else p.vx = 0;
-      if (jump && p.onGround) { p.vy = -PLAYER_JUMP; controlsState.jump=false; }
+
+      // If pressing jump and jumpCount < 2, jump and increment jumpCount
+      if (jump && p.jumpCount < 2) {
+        p.vy = -PLAYER_JUMP;
+        p.onGround = false;
+        p.jumpCount++;
+        controlsState.jump = false; // Prevent holding jump
+      }
       if (controlsState.attack) { startAttack(); controlsState.attack = false; }
       if (controlsState.interact) { /* (interact logic here if needed) */ controlsState.interact = false; }
     } else {
       p.vx = 0;
     }
+
     p.vy += GRAVITY;
     let nextX = p.x + p.vx, nextY = p.y + p.vy;
     let col = collideWithMap(nextX, p.y);
     if (!col.x) p.x = nextX; else p.vx = 0;
     col = collideWithMap(p.x, nextY);
-    if (!col.y) { p.y = nextY; p.onGround = false; }
-    else { p.vy = 0; p.onGround = true; }
+    if (!col.y) {
+      p.y = nextY; 
+      // Check if we just left the ground
+      if (p.onGround) { p.onGround = false; }
+    } else {
+      p.vy = 0; 
+      if (!p.onGround) {
+        p.onGround = true;
+        p.jumpCount = 0; // Reset double jump when touching ground
+      }
+    }
+
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
     if (door && !dialogActive) {
       let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
@@ -416,6 +436,8 @@
     gameState.player.x = tx*TILE;
     gameState.player.y = ty*TILE;
     gameState.player.hp = hp||6;
+    gameState.player.vy = 0;
+    gameState.player.jumpCount = 0;
   }
 
   showDialog("Welcome to ZETA: Descent into Void");
