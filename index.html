@@ -590,4 +590,18 @@
         player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
         dialog: null,
         enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
-        collectibles: JSON.parse(JSON.stringify(autogenRoom.collectible
+        collectibles: JSON.parse(JSON.stringify(autogenRoom.      collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
+      notes: [],
+      corruption: 0,
+      score: 0
+    });
+    gameOver = false;
+  }
+});
+
+showDialog("Welcome to ZETA: Descent into Void");
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>
