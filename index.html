@@ -67,8 +67,9 @@
     <button id="btn-interact">E</button>
   </div>
   <script>
-  // === ZETA: Descent into Void — Pure Canvas Version, Movement FIXED ===
+  // ==== AAA Mobile Controls, Reliable Movement, and Attack ====
 
+  // --- Config ---
   const CANVAS_BASE_W = 320, CANVAS_BASE_H = 180;
   const TILE = 16;
   const PLAYER_SIZE = 16;
@@ -86,23 +87,32 @@
   const ctx = canvas.getContext('2d');
   let scale = 1;
 
-  // --- Mobile Controls State ---
-  let isMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) || window.innerWidth < 700;
-  document.getElementById("controls").style.display = isMobile ? "flex" : "none";
-  let mobileLeft = false, mobileRight = false, mobileJump = false, mobileAttack = false, mobileInteract = false;
+  // --- Reliable Mobile Controls State ---
+  const controlsState = { left:false, right:false, jump:false, attack:false, interact:false };
   function bindMobileControls() {
-    const map = {
-      "btn-left": "mobileLeft",
-      "btn-right": "mobileRight",
-      "btn-jump": "mobileJump",
-      "btn-attack": "mobileAttack",
-      "btn-interact": "mobileInteract"
-    };
-    Object.entries(map).forEach(([btnId, flag]) => {
+    const map = [
+      ["btn-left", "left"],
+      ["btn-right", "right"],
+      ["btn-jump", "jump"],
+      ["btn-attack", "attack"],
+      ["btn-interact", "interact"]
+    ];
+    map.forEach(([btnId, flag]) => {
       const el = document.getElementById(btnId);
-      el.addEventListener("touchstart", e => { e.preventDefault(); window[flag] = true; el.classList.add("pressed"); }, {passive:false});
-      el.addEventListener("touchend", e => { e.preventDefault(); window[flag] = false; el.classList.remove("pressed"); }, {passive:false});
-      el.addEventListener("touchcancel", e => { window[flag] = false; el.classList.remove("pressed"); });
+      el.addEventListener("touchstart", e => {
+        e.preventDefault();
+        controlsState[flag] = true;
+        el.classList.add("pressed");
+      }, {passive:false});
+      el.addEventListener("touchend", e => {
+        e.preventDefault();
+        controlsState[flag] = false;
+        el.classList.remove("pressed");
+      }, {passive:false});
+      el.addEventListener("touchcancel", e => {
+        controlsState[flag] = false;
+        el.classList.remove("pressed");
+      });
     });
   }
   bindMobileControls();
@@ -120,6 +130,14 @@
     document.body.style.overflow = "hidden";
   }
   window.addEventListener("resize", resizeCanvas); resizeCanvas();
+
+  // --- Show/hide controls for mobile ---
+  function showControlsIfMobile() {
+    let isMobile = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) || window.innerWidth < 700;
+    document.getElementById("controls").style.display = isMobile ? "flex" : "none";
+  }
+  showControlsIfMobile();
+  window.addEventListener("resize", showControlsIfMobile);
 
   // --- Simple Assets (drawn, no images) ---
   function drawTile(ch, x, y) {
@@ -204,7 +222,6 @@
     corruption: 0
   };
 
-  // --- Player Drawing ---
   function drawPlayer(x, y, facing, attacking, attackFrame) {
     ctx.save();
     ctx.translate(x+PLAYER_SIZE/2, y+PLAYER_SIZE/2);
@@ -318,14 +335,16 @@
 
   function gameLoop() {
     let p = gameState.player;
-    let left = keys['arrowleft']||keys['a']||mobileLeft, right = keys['arrowright']||keys['d']||mobileRight;
-    let jump = keys['arrowup']||keys['w']||mobileJump;
+    let left = keys['arrowleft']||keys['a']||controlsState.left;
+    let right = keys['arrowright']||keys['d']||controlsState.right;
+    let jump = keys['arrowup']||keys['w']||controlsState.jump;
     if (!dialogActive) {
       if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
       else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
       else p.vx = 0;
-      if (jump && p.onGround) { p.vy = -PLAYER_JUMP; mobileJump=false; }
-      if (mobileAttack) { startAttack(); mobileAttack = false; }
+      if (jump && p.onGround) { p.vy = -PLAYER_JUMP; controlsState.jump=false; }
+      if (controlsState.attack) { startAttack(); controlsState.attack = false; }
+      if (controlsState.interact) { /* (interact logic here if needed) */ controlsState.interact = false; }
     } else {
       p.vx = 0;
     }
@@ -341,7 +360,7 @@
       let d = rooms[gameState.room].doors.find(d=>d.x===door.x&&d.y===door.y);
       if (d) switchRoom(d.target, d.tx, d.ty, p.hp);
     }
-    if ((keys['e']||mobileInteract) && !dialogActive) {
+    if ((keys['e']||controlsState.interact) && !dialogActive) {
       let tx = Math.floor((p.x+8)/TILE), ty = Math.floor((p.y+8)/TILE);
       let sym = charAt(tx, ty-1);
       if (sym==='n') {
@@ -351,7 +370,7 @@
         ]);
       }
       if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
-      mobileInteract = false;
+      controlsState.interact = false;
     }
     if (p.attacking) {
       attackTimer--;
