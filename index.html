@@ -16,6 +16,37 @@
       image-rendering: pixelated;
       touch-action: none;
     }
+    .parallax-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: -1;
+    }
+    .parallax-stars {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: white;
+      border-radius: 50%;
+      animation: twinkle 1s infinite;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .particle {
+      position: absolute;
+      pointer-events: none;
+      border-radius: 50%;
+      animation: particle-fade 0.5s forwards;
+    }
+    @keyframes particle-fade {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0); opacity: 0; }
+    }
     .dialog {
       font-family: 'Press Start 2P', monospace;
       background: rgba(20,0,30,0.96);
@@ -38,18 +69,48 @@
       z-index: 20; gap: 12px; width: 100vw; justify-content: center;
     }
     .controls button {
-      width: 54px; height: 54px;
+      width: 54px;
+      height: 54px;
       background: #330033cc;
       border: 2px solid #5c1a5c;
       border-radius: 10px;
-      color: #fff; font-size: 32px; font-family: inherit;
-      margin: 0 4px; user-select: none; outline: none;
+      color: #fff;
+      font-size: 24px;
+      font-family: inherit;
+      margin: 0 4px;
+      user-select: none;
+      outline: none;
       box-shadow: 0 2px 12px 0 #0006;
       pointer-events: auto;
       touch-action: none;
-      transition: filter 0.12s, background 0.12s;
+      transition: all 0.12s ease-out;
+      position: relative;
+      overflow: hidden;
     }
-    .controls button.pressed { background: #6622aa; filter: brightness(1.25); }
+    .controls button:active,
+    .controls button.pressed {
+      background: #6622aa;
+      transform: scale(0.95);
+      filter: brightness(1.25);
+    }
+    .controls button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(rgba(255,255,255,0.2), transparent);
+      pointer-events: none;
+    }
+    #btn-interact {
+      background: #225522cc;
+      border-color: #2a662a;
+    }
+    #btn-interact:active,
+    #btn-interact.pressed {
+      background: #338833;
+    }
     @media (max-width: 700px) {
       .controls { display: flex; }
       .dialog { font-size: 18px; min-width: 50vw;}
@@ -66,6 +127,7 @@
     <button id="btn-attack">&#9935;</button>
     <button id="btn-interact">E</button>
   </div>
+  <div id="uiOverlay" style="position:fixed;top:0;left:0;width:100vw;z-index:30;pointer-events:none;text-align:center;"></div>
   <script>
   // ==== ZETA: Fixes for Enemies, Points, and Buttons ====
 
@@ -101,22 +163,101 @@
     ];
     map.forEach(([btnId, flag]) => {
       const el = document.getElementById(btnId);
-      el.addEventListener("touchstart", e => {
+      if (!el) return; // Skip if button doesn't exist
+      
+      // Remove any existing listeners
+      const newEl = el.cloneNode(true);
+      el.parentNode.replaceChild(newEl, el);
+      
+      // Add touch handlers
+      newEl.addEventListener("touchstart", e => {
         e.preventDefault();
         controlsState[flag] = true;
-        el.classList.add("pressed");
+        newEl.classList.add("pressed");
       }, {passive:false});
-      el.addEventListener("touchend", e => {
+      
+      newEl.addEventListener("touchend", e => {
         e.preventDefault();
         controlsState[flag] = false;
-        el.classList.remove("pressed");
+        newEl.classList.remove("pressed");
       }, {passive:false});
-      el.addEventListener("touchcancel", e => {
+      
+      newEl.addEventListener("touchcancel", e => {
         controlsState[flag] = false;
-        el.classList.remove("pressed");
+        newEl.classList.remove("pressed");
+      });
+      
+      // Add mouse handlers for testing on desktop
+      newEl.addEventListener("mousedown", e => {
+        e.preventDefault();
+        controlsState[flag] = true;
+        newEl.classList.add("pressed");
+      });
+      
+      newEl.addEventListener("mouseup", e => {
+        e.preventDefault();
+        controlsState[flag] = false;
+        newEl.classList.remove("pressed");
+      });
+      
+      // Handle mouse leaving the button
+      newEl.addEventListener("mouseleave", e => {
+        controlsState[flag] = false;
+        newEl.classList.remove("pressed");
       });
     });
   }
+  
+  // Update mobile controls style
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    .controls button {
+      width: 54px;
+      height: 54px;
+      background: #330033cc;
+      border: 2px solid #5c1a5c;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 24px;
+      font-family: inherit;
+      margin: 0 4px;
+      user-select: none;
+      outline: none;
+      box-shadow: 0 2px 12px 0 #0006;
+      pointer-events: auto;
+      touch-action: none;
+      transition: all 0.12s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+    .controls button:active,
+    .controls button.pressed {
+      background: #6622aa;
+      transform: scale(0.95);
+      filter: brightness(1.25);
+    }
+    .controls button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(rgba(255,255,255,0.2), transparent);
+      pointer-events: none;
+    }
+    #btn-interact {
+      background: #225522cc;
+      border-color: #2a662a;
+    }
+    #btn-interact:active,
+    #btn-interact.pressed {
+      background: #338833;
+    }
+  `;
+  document.head.appendChild(styleSheet);
+  
+  // Initialize controls
   bindMobileControls();
 
   // --- Responsive Canvas ---
@@ -141,14 +282,19 @@
   showControlsIfMobile();
   window.addEventListener("resize", showControlsIfMobile);
 
+  // --- Power-up Types (move this to the top, before spawnPowerup and generateRoom) ---
+  const POWERUP_TYPES = {
+    DOUBLE_DAMAGE: { symbol: '⚔️', color: '#ff5555', effect: 'Double damage for 10 seconds' },
+    SPEED_BOOST: { symbol: '⚡', color: '#ffff00', effect: 'Speed boost for 8 seconds' },
+    SHIELD: { symbol: '🛡️', color: '#55ff55', effect: 'Temporary invulnerability' }
+  };
+
   // --- Procedural Level Generation ---
   function generateRoom(width=20, height=9) {
     let map = Array(height).fill().map(()=>Array(width).fill(' '));
     for(let x=0; x<width; x++) { map[0][x]='='; map[height-1][x]='='; }
     for(let y=0; y<height; y++) { map[y][0]='='; map[y][width-1]='='; }
-    // Place floor
     for(let x=1; x<width-1; x++) map[height-2][x]='=';
-    // Add random platforms (and record their locations)
     let platforms = [];
     for(let i=0; i<4; i++) {
       let px = 2+Math.floor(Math.random()*(width-6));
@@ -158,9 +304,19 @@
         if(px+j<width-1) map[py][px+j]='=';
       platforms.push({x:px, y:py, len:len});
     }
-    // Place door (always on right side)
     let doorX = width-2, doorY = height-3;
     map[doorY][doorX] = '+';
+    // Place button (guaranteed)
+    let buttonPlaced = false;
+    for (let tries = 0; tries < 100 && !buttonPlaced; tries++) {
+      let px = 2+Math.floor(Math.random()*(width-4));
+      let py = 2+Math.floor(Math.random()*(height-4));
+      if (map[py][px] === ' ' && map[py+1][px] === '=') {
+        map[py][px] = 'B';
+        buttonPlaced = true;
+      }
+    }
+    if (!buttonPlaced) { map[1][1] = 'B'; } // fallback
     // Place a few enemies: only on platforms or floor, open space above
     let enemyList = [];
     let placed = 0, tries = 0;
@@ -171,11 +327,14 @@
       let ey = pform.y-1;
       if (map[ey][ex] === ' ' && map[ey+1][ex]==='=') {
         map[ey][ex]='*';
-        enemyList.push({x:ex*TILE, y:ey*TILE, vx:ENEMY_SPEED*(Math.random()<0.5?-1:1), vy:0, dir:Math.random()<0.5?-1:1, dead:false});
+        let dir = Math.random()<0.5 ? -1 : 1;
+        let vx = ENEMY_SPEED * dir;
+        enemyList.push({x:ex*TILE, y:ey*TILE, vx:vx, vy:0, dir:dir, dead:false});
         placed++;
       }
       tries++;
     }
+    
     // Place a few collectibles (points/orbs), only on platforms/floor
     let collectibles = [];
     for(let i=0;i<4;i++) {
@@ -186,20 +345,63 @@
         let px = pf.x + Math.floor(Math.random()*pf.len);
         let py = pf.y-1;
         if(map[py][px]===' ' && map[py+1][px]==='=') {
-          map[py][px]='o'; collectibles.push({x:px*TILE, y:py*TILE, taken:false});
+          map[py][px]='o';
+          collectibles.push({x:px*TILE, y:py*TILE, taken:false});
         }
       } else {
         // Floor
         let px = 2+Math.floor(Math.random()*(width-4));
         let py = height-3;
         if(map[py][px]===' ' && map[py+1][px]==='=') {
-          map[py][px]='o'; collectibles.push({x:px*TILE, y:py*TILE, taken:false});
+          map[py][px]='o';
+          collectibles.push({x:px*TILE, y:py*TILE, taken:false});
         }
       }
     }
+
+    // Place power-ups (with 30% chance)
+    let powerups = [];
+    if (Math.random() < 0.3) {
+      let powerup = spawnPowerup(map);
+      if (powerup) {
+        powerups.push(powerup);
+        let px = Math.floor(powerup.x/TILE);
+        let py = Math.floor(powerup.y/TILE);
+        map[py][px] = 'P'; // New symbol for power-ups
+      }
+    }
+    
     // Place NPC or lore
-    map[2][2]='n'; map[2][width-3]='@';
-    return {map: map.map(row=>row.join('')), enemies: enemyList, collectibles, door: {x:doorX, y:doorY}};
+    map[2][2]='n';
+    map[2][width-3]='@';
+    
+    // Player spawn: always on empty tile
+    let spawnX = 2, spawnY = 2;
+    for (let y = 1; y < height-1; y++) {
+      for (let x = 1; x < width-1; x++) {
+        if (map[y][x] === ' ' && map[y+1][x] === '=') {
+          spawnX = x; spawnY = y;
+          break;
+        }
+      }
+    }
+    
+    // Randomly place spikes on floor/platforms
+    for(let i=0;i<2;i++) {
+      let px = 2+Math.floor(Math.random()*(width-4));
+      let py = height-3;
+      if(map[py][px]===' ' && map[py+1][px]==='=') map[py][px]='^';
+    }
+    
+    return {
+      map: map.map(row=>row.join('')),
+      enemies: enemyList,
+      collectibles,
+      powerups,
+      door: {x:doorX, y:doorY},
+      button: buttonPlaced,
+      spawn: {x: spawnX, y: spawnY}
+    };
   }
 
   // --- Rooms ---
@@ -222,7 +424,279 @@
     collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
     notes: [],
     corruption: 0,
-    score: 0
+    score: 0,
+    doorUnlocked: false,
+    stage: 1,
+    mode: 'endless'
+  };
+
+  // --- Audio System ---
+  let audioContext = null;
+  let audioEnabled = false;
+
+  function initAudio() {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioEnabled = true;
+    } catch (e) {
+      console.warn('Web Audio API not supported');
+      audioEnabled = false;
+    }
+  }
+
+  // Create simple sound effects
+  function createSound(type) {
+    if (!audioEnabled || !audioContext) return;
+    
+    try {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      switch(type) {
+        case 'jump':
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.1);
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.2);
+          break;
+        case 'attack':
+          oscillator.type = 'square';
+          oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
+          gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.1);
+          break;
+        case 'collect':
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.1);
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.1);
+          break;
+        case 'hurt':
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.2);
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.2);
+          break;
+        case 'powerup':
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.15);
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.15);
+          break;
+      }
+    } catch (e) {
+      console.warn('Error playing sound:', e);
+    }
+  }
+
+  // Initialize audio on first user interaction
+  window.addEventListener('keydown', function initAudioOnFirstInteraction() {
+    if (!audioContext) {
+      initAudio();
+      window.removeEventListener('keydown', initAudioOnFirstInteraction);
+    }
+  }, { once: true });
+
+  // Also init audio on touch for mobile
+  window.addEventListener('touchstart', function initAudioOnFirstTouch() {
+    if (!audioContext) {
+      initAudio();
+      window.removeEventListener('touchstart', initAudioOnFirstTouch);
+    }
+  }, { once: true });
+
+  // --- Particle System ---
+  const MAX_PARTICLES = 50;
+  let activeParticles = [];
+  
+  function createParticle(x, y, color, type = 'normal') {
+    // Remove excess particles if we're over the limit
+    while (activeParticles.length >= MAX_PARTICLES) {
+      const oldParticle = activeParticles.shift();
+      if (oldParticle.element && oldParticle.element.parentNode) {
+        oldParticle.element.parentNode.removeChild(oldParticle.element);
+      }
+    }
+
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    // Position absolutely over the canvas
+    const rect = canvas.getBoundingClientRect();
+    particle.style.position = 'absolute';
+    particle.style.left = (rect.left + x * scale) + 'px';
+    particle.style.top = (rect.top + y * scale) + 'px';
+    particle.style.width = type === 'jump' ? (4*scale)+'px' : (2*scale)+'px';
+    particle.style.height = type === 'jump' ? (4*scale)+'px' : (2*scale)+'px';
+    particle.style.background = color;
+    particle.style.pointerEvents = 'none';
+    particle.style.borderRadius = '50%';
+    particle.style.zIndex = 15; // Above canvas, below UI
+    particle.style.animation = 'particle-fade 0.5s forwards';
+
+    document.body.appendChild(particle);
+
+    const particleData = {
+      element: particle,
+      createdAt: Date.now()
+    };
+    activeParticles.push(particleData);
+
+    setTimeout(() => {
+      const index = activeParticles.indexOf(particleData);
+      if (index > -1) {
+        activeParticles.splice(index, 1);
+      }
+      if (particle.parentNode) {
+        particle.parentNode.removeChild(particle);
+      }
+    }, 500);
+  }
+
+  // Cleanup function for particles when switching rooms or restarting
+  function cleanupParticles() {
+    for (const particle of activeParticles) {
+      if (particle.element && particle.element.parentNode) {
+        particle.element.parentNode.removeChild(particle.element);
+      }
+    }
+    activeParticles = [];
+  }
+
+  // --- Place this near the top, before any code that calls switchRoom ---
+  function switchRoom(name, tx, ty, hp, enemies, collectibles, powerups) {
+    cleanupParticles();
+    const room = rooms[name];
+    gameState.room = name;
+    gameState.player.x = (room && room.spawn ? room.spawn.x : tx) * TILE;
+    gameState.player.y = (room && room.spawn ? room.spawn.y : ty) * TILE;
+    gameState.player.hp = hp||MAX_HP;
+    gameState.player.vy = 0;
+    gameState.player.jumpCount = 0;
+    gameState.player.invuln = 0;
+    gameState.player.attacking = false;
+    gameState.enemies = JSON.parse(JSON.stringify(enemies));
+    gameState.collectibles = JSON.parse(JSON.stringify(collectibles));
+    gameState.powerups = JSON.parse(JSON.stringify(powerups || []));
+    gameState.doorUnlocked = false;
+    // Keep active power-ups when switching rooms
+    saveBestTime(gameState.stage, levelTimer);
+    levelTimer = 0;
+  }
+
+  // Update the restart event listener to clean up particles
+  window.addEventListener("keydown", function(e){
+    if(gameOver && (e.key==="r"||e.key==="R")) {
+      cleanupParticles();
+      let autogenRoom = generateRoom();
+      rooms = {
+        autogen: {
+          name: "Procedural Room",
+          map: autogenRoom.map,
+          doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
+          bg: "#181035"
+        }
+      };
+      Object.assign(gameState, {
+        room: "autogen",
+        player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
+        dialog: null,
+        enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
+        collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
+        powerups: JSON.parse(JSON.stringify(autogenRoom.powerups || [])),
+        activePowerups: {
+          DOUBLE_DAMAGE: 0,
+          SPEED_BOOST: 0,
+          SHIELD: 0
+        },
+        notes: [],
+        corruption: 0,
+        score: 0,
+        stage: 1
+      });
+      gameOver = false;
+    }
+  });
+
+  // --- Power-ups ---
+  function spawnPowerup(room) {
+    const types = Object.keys(POWERUP_TYPES);
+    const type = types[Math.floor(Math.random() * types.length)];
+    const x = 2 + Math.floor(Math.random() * (room[0].length - 4));
+    const y = 2 + Math.floor(Math.random() * (room.length - 4));
+    
+    if (room[y][x] === ' ' && room[y+1][x] === '=') {
+      return {
+        x: x * TILE,
+        y: y * TILE,
+        type: type,
+        active: true,
+        duration: 0
+      };
+    }
+    return null;
+  }
+
+  // --- Combo System ---
+  let comboTimer = 0;
+  let comboMultiplier = 1;
+  const COMBO_TIME = 180; // 3 seconds at 60fps
+
+  function updateCombo() {
+    if (comboTimer > 0) {
+      comboTimer--;
+      if (comboTimer === 0) {
+        comboMultiplier = 1;
+      }
+    }
+  }
+
+  function addToCombo() {
+    comboTimer = COMBO_TIME;
+    comboMultiplier = Math.min(comboMultiplier + 0.5, 4);
+  }
+
+  // --- Parallax Background ---
+  function createStarryBackground() {
+    const bg = document.createElement('div');
+    bg.className = 'parallax-bg';
+    
+    for (let i = 0; i < 50; i++) {
+      const star = document.createElement('div');
+      star.className = 'parallax-stars';
+      star.style.left = Math.random() * 100 + '%';
+      star.style.top = Math.random() * 100 + '%';
+      star.style.animationDelay = Math.random() + 's';
+      bg.appendChild(star);
+    }
+    
+    document.body.insertBefore(bg, document.body.firstChild);
+  }
+
+  createStarryBackground();
+
+  // Add powerups to game state
+  gameState.powerups = [];
+  gameState.activePowerups = {
+    DOUBLE_DAMAGE: 0,
+    SPEED_BOOST: 0,
+    SHIELD: 0
   };
 
   // --- Drawing ---
@@ -231,10 +705,10 @@
       ctx.fillStyle = ch === '=' ? "#4b236c" : "#33103c";
       ctx.fillRect(x, y, TILE, TILE);
     } else if (ch === '+') {
-      ctx.strokeStyle = "#a0a";
+      ctx.strokeStyle = gameState.doorUnlocked ? '#6f6' : '#a0a';
       ctx.lineWidth = 3;
       ctx.strokeRect(x+2, y+2, TILE-4, TILE-4);
-      ctx.strokeStyle = "#fff";
+      ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
     } else if (ch === '*') {
       ctx.fillStyle = "#a01034";
@@ -264,7 +738,66 @@
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.restore();
-      ctx.strokeStyle="#f95";ctx.beginPath();ctx.arc(x+8,y+8,6,0,6.29);ctx.stroke();
+      ctx.strokeStyle="#f95";
+      ctx.beginPath();
+      ctx.arc(x+8,y+8,6,0,6.29);
+      ctx.stroke();
+    } else if (ch === 'P') {
+      // Find the actual power-up at this location
+      const powerup = gameState.powerups.find(p => 
+        p.active && 
+        Math.floor(p.x/TILE) === Math.floor(x/TILE) && 
+        Math.floor(p.y/TILE) === Math.floor(y/TILE)
+      );
+      
+      if (powerup) {
+        const type = POWERUP_TYPES[powerup.type];
+        ctx.save();
+        // Glow effect
+        ctx.shadowColor = type.color;
+        ctx.shadowBlur = 8;
+        // Base circle
+        ctx.beginPath();
+        ctx.arc(x+8, y+8, 6, 0, Math.PI * 2);
+        ctx.fillStyle = type.color;
+        ctx.fill();
+        // Pulsing effect
+        const pulse = Math.sin(Date.now() / 200) * 0.2 + 0.8;
+        ctx.globalAlpha = pulse;
+        ctx.beginPath();
+        ctx.arc(x+8, y+8, 8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Symbol
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(type.symbol, x+8, y+8);
+        ctx.restore();
+      }
+    } else if (ch === 'B') {
+      ctx.save();
+      ctx.fillStyle = gameState.doorUnlocked ? '#3f6' : '#fa0';
+      ctx.beginPath();
+      ctx.arc(x+8, y+8, 6, 0, 6.29);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    } else if (ch === '^') {
+      ctx.save();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(x, y+TILE); ctx.lineTo(x+8, y); ctx.lineTo(x+16, y+TILE);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#f33';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
     }
   }
 
@@ -381,9 +914,33 @@
     }
   }
 
+  // --- Global screen shake variables ---
+  let shakeTime = 0, shakeMag = 0;
+
+  // --- Move triggerShake definition to top ---
+  function triggerShake(mag=4, time=12) { shakeMag = mag; shakeTime = time; }
+
+  // --- Global fade variables ---
+  let fading = false, fadeAlpha = 0, fadeDir = 1, fadeCallback = null;
+
   // --- Main Game Loop ---
   function gameLoop() {
     let p = gameState.player;
+    if (paused) {
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.globalAlpha = 1;
+      ctx.font = 'bold 32px '+font;
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText('PAUSED', CANVAS_BASE_W/2, CANVAS_BASE_H/2);
+      ctx.font = '16px '+font;
+      ctx.fillText('Press Esc to resume', CANVAS_BASE_W/2, CANVAS_BASE_H/2+32);
+      ctx.fillText('Press M to toggle sound', CANVAS_BASE_W/2, CANVAS_BASE_H/2+52);
+      return requestAnimationFrame(gameLoop);
+    }
     if(gameOver) {
       ctx.fillStyle="#000b";
       ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -402,24 +959,60 @@
     let left = keys['arrowleft']||keys['a']||controlsState.left;
     let right = keys['arrowright']||keys['d']||controlsState.right;
     let jump = keys['arrowup']||keys['w']||controlsState.jump;
+    let interact = keys['e']||controlsState.interact;
 
-    // DOUBLE JUMP LOGIC
+    // Update power-up durations
+    for (let type in gameState.activePowerups) {
+      if (gameState.activePowerups[type] > 0) {
+        gameState.activePowerups[type]--;
+      }
+    }
+
+    // Apply power-up effects and get current speed
+    const currentSpeed = applyPowerUpEffects(p);
+
     if (!dialogActive) {
-      if (left) { p.vx = -PLAYER_SPEED; p.facing = -1; }
-      else if (right) { p.vx = PLAYER_SPEED; p.facing = 1; }
+      if (left) { p.vx = -currentSpeed; p.facing = -1; }
+      else if (right) { p.vx = currentSpeed; p.facing = 1; }
       else p.vx = 0;
 
       if (jump && p.jumpCount < 2) {
         p.vy = -PLAYER_JUMP;
         p.onGround = false;
         p.jumpCount++;
-        controlsState.jump = false; // Prevent holding jump
+        controlsState.jump = false;
+        createSound('jump');
+        // Jump particles
+        for (let i = 0; i < 5; i++) {
+          createParticle(p.x + 8 + Math.random() * 8 - 4, p.y + 16, '#fff', 'jump');
+        }
       }
       if (controlsState.attack) { startAttack(); controlsState.attack = false; }
-      if (controlsState.interact) { controlsState.interact = false; }
+      if (interact) {
+        let tx = Math.floor((p.x+8)/TILE);
+        let ty = Math.floor((p.y+8)/TILE);
+        let sym = charAt(tx, ty);
+        if (sym === 'n') {
+          showDialog(["We waited for you, 🜲.","The unbelievers are near."], [
+            ["Accept the truth", () => { showDialog("A strange energy fills the air..."); gameState.corruption++; }],
+            ["Walk away", () => {}]
+          ]);
+        }
+        if (sym === '@') {
+          showDialog(["Day 17: Flakious spoke through the void."]);
+        }
+        if (sym === 'B' && !gameState.doorUnlocked) {
+          gameState.doorUnlocked = true;
+          showDialog('You hear a door unlock!');
+        }
+        controlsState.interact = false;
+      }
     } else {
       p.vx = 0;
     }
+
+    // Update combo system
+    updateCombo();
 
     p.vy += GRAVITY;
     let nextX = p.x + p.vx, nextY = p.y + p.vy;
@@ -433,13 +1026,35 @@
       p.vy = 0; 
       if (!p.onGround) {
         p.onGround = true;
-        p.jumpCount = 0; // Reset double jump when touching ground
+        p.jumpCount = 0;
+        // Landing particles
+        for (let i = 0; i < 3; i++) {
+          createParticle(p.x + 8 + Math.random() * 8 - 4, p.y + 16, '#aaa');
+        }
       }
     }
 
-    // --- Enemy logic ---
+    // --- Enemy logic with power-ups ---
+    // Filter out dead enemies
+    gameState.enemies = gameState.enemies.filter(e => {
+      if (e.dead) {
+        // Create death particles before removing
+        for (let i = 0; i < 8; i++) {
+          createParticle(
+            e.x + 8 + (Math.random() * 8 - 4),
+            e.y + 8 + (Math.random() * 8 - 4),
+            '#f00'
+          );
+        }
+        // Remove from map
+        removeFromMap(e.x, e.y, '*');
+        return false;
+      }
+      return true;
+    });
+
+    // Update remaining enemies
     for(let e of gameState.enemies) {
-      if(e.dead) continue;
       let ex = e.x/TILE, ey = e.y/TILE;
       let nx = Math.floor((e.x+e.dir*ENEMY_SPEED*12)/TILE);
       let below = charAt(nx, ey+1);
@@ -450,65 +1065,101 @@
         e.dir *= -1;
         e.vx = ENEMY_SPEED*e.dir;
       }
-      // --- Attack by player (attack hitbox)
+      
+      // Attack with double damage
       if(p.attacking && attackTimer>0) {
         let ax = p.facing>0 ? p.x+18 : p.x-2;
         let ay = p.y+8;
         if(Math.abs(ax-e.x-8)<14 && Math.abs(ay-e.y-8)<14) {
-          e.dead=true;
+          e.dead = true;
+          addToCombo();
+          createSound('attack');
+          // Enhanced attack particles for double damage
+          const particleCount = gameState.activePowerups.DOUBLE_DAMAGE > 0 ? 12 : 8;
+          for (let i = 0; i < particleCount; i++) {
+            createParticle(
+              e.x + 8 + (Math.random() * 8 - 4),
+              e.y + 8 + (Math.random() * 8 - 4),
+              gameState.activePowerups.DOUBLE_DAMAGE > 0 ? '#f55' : '#f00'
+            );
+          }
+          continue; // Skip damage check for dead enemy
         }
       }
-      // --- Damage player on contact (if not invulnerable)
-      if(!p.invuln && !e.dead && Math.abs(p.x-e.x)<14 && Math.abs(p.y-e.y)<14) {
-        p.hp -= ENEMY_DAMAGE;
-        p.invuln = 30; // 0.5s
-        if(p.hp<=0) {
-          p.hp = 0; gameOver = true;
+      
+      // Damage player (unless shielded)
+      if(!p.invuln && Math.abs(p.x-e.x)<14 && Math.abs(p.y-e.y)<14) {
+        if (gameState.activePowerups.SHIELD > 0) {
+          // Shield particles
+          for (let i = 0; i < 5; i++) {
+            createParticle(p.x + 8, p.y + 8, '#5f5');
+          }
+        } else {
+          p.hp -= ENEMY_DAMAGE;
+          p.invuln = 30;
+          createSound('hurt');
+          if(p.hp<=0) {
+            p.hp = 0;
+            gameOver = true;
+          }
         }
       }
     }
     if(p.invuln) p.invuln--;
 
-    // --- Collectibles logic ---
-    for(let c of gameState.collectibles) {
-      if(c.taken) continue;
-      if(Math.abs(p.x-c.x)<12 && Math.abs(p.y-c.y)<12) {
+    // --- Collectibles with combo system ---
+    // Filter out collected items
+    gameState.collectibles = gameState.collectibles.filter(c => {
+      if (!c.taken && Math.abs(p.x-c.x)<12 && Math.abs(p.y-c.y)<12) {
         c.taken = true;
-        gameState.score += 10;
+        gameState.score += Math.floor(10 * comboMultiplier);
+        addToCombo();
+        createSound('collect');
+        // Collect particles
+        for (let i = 0; i < 6; i++) {
+          createParticle(c.x + 8, c.y + 8, '#ff0');
+        }
+        // Remove from map
+        removeFromMap(c.x, c.y, 'o');
+        return false;
       }
-    }
+      return !c.taken;
+    });
+
+    // --- Power-ups ---
+    // Filter out collected power-ups
+    gameState.powerups = gameState.powerups.filter(powerup => {
+      if (powerup.active && Math.abs(p.x - powerup.x) < 12 && Math.abs(p.y - powerup.y) < 12) {
+        powerup.active = false;
+        gameState.activePowerups[powerup.type] = powerup.type === 'SHIELD' ? 300 : 600;
+        createSound('powerup');
+        showDialog(POWERUP_TYPES[powerup.type].effect);
+        // Power-up particles
+        for (let i = 0; i < 10; i++) {
+          createParticle(p.x + 8, p.y + 8, POWERUP_TYPES[powerup.type].color);
+        }
+        // Remove from map
+        removeFromMap(powerup.x, powerup.y, 'P');
+        return false;
+      }
+      return powerup.active;
+    });
 
     // --- Door/level generation ---
     let door = doorAt(Math.floor((p.x+8)/TILE), Math.floor((p.y+8)/TILE));
-    if (door && !dialogActive) {
+    if (door && !dialogActive && gameState.doorUnlocked) {
+      gameState.stage = (gameState.stage || 1) + 1;
       let newRoom = generateRoom();
       rooms["autogen"] = {
         name: "Procedural Room",
         map: newRoom.map,
         doors: [ { x: newRoom.door.x, y: newRoom.door.y, target: "autogen", tx: 1, ty: newRoom.door.y } ],
-        bg: "#181035"
+        bg: "#181035",
+        spawn: newRoom.spawn
       };
-      switchRoom("autogen", 1, newRoom.door.y, p.hp, newRoom.enemies, newRoom.collectibles);
-      return requestAnimationFrame(gameLoop);
-    }
-
-    // --- NPC/Lore Interact ---
-    if ((keys['e']||controlsState.interact) && !dialogActive) {
-      let tx = Math.floor((p.x+8)/TILE), ty = Math.floor((p.y+8)/TILE);
-      let sym = charAt(tx, ty-1);
-      if (sym==='n') {
-        showDialog(["We waited for you, 🜲.","The unbelievers are near."], [
-          ["Accept the truth", () => { showDialog("A strange energy fills the air..."); gameState.corruption++; }],
-          ["Walk away", () => {}]
-        ]);
-      }
-      if (sym==='@') showDialog(["Day 17: Flakious spoke through the void."]);
-      controlsState.interact = false;
-    }
-
-    if (p.attacking) {
-      attackTimer--;
-      if (attackTimer<=0) { p.attacking = false; attackTimer = 0; }
+      switchRoom("autogen", newRoom.spawn.x, newRoom.spawn.y, gameState.player.hp, newRoom.enemies, newRoom.collectibles, newRoom.powerups);
+      requestAnimationFrame(gameLoop);
+      return;
     }
 
     // --- Render ---
@@ -520,38 +1171,86 @@
     ctx.fillRect(0,0,canvas.width,canvas.height); ctx.globalAlpha = 1;
     let map = rooms[gameState.room].map;
     for (let y=0;y<map.length;y++)
-      for (let x=0;x<map[0].length;x++)
-        drawTile(map[y][x], x*TILE, y*TILE);
-    // Enemies
+      for (let x=0;x<map[0].length;x++) {
+        // Only draw static tiles (platforms, walls, door, button, etc.)
+        let ch = map[y][x];
+        if (ch === '=' || ch === '|' || ch === '+' || ch === 'n' || ch === '@' || ch === 'B')
+          drawTile(ch, x*TILE, y*TILE);
+        // Do NOT draw 'o', '*', or 'P' from the map here
+      }
+    // Draw only live enemies
     for(let e of gameState.enemies) if(!e.dead)
       drawTile('*', e.x, e.y);
-    // Collectibles
+    // Draw only live collectibles
     for(let c of gameState.collectibles)
       if(!c.taken) drawTile('o', c.x, c.y);
+    // Draw only active power-ups
+    for(let powerup of (gameState.powerups||[]))
+      if(powerup.active) drawTile('P', powerup.x, powerup.y);
     // Player
     if(!p.invuln || (p.invuln%4<2))
       drawPlayer(p.x,p.y,p.facing,p.attacking,attackTimer);
     drawHearts(p.hp);
-    // Score
-    ctx.font = "bold 16px "+font; ctx.fillStyle="#ffe066";
-    ctx.textAlign = "left";
-    ctx.fillText("Score: "+gameState.score, 10, 48);
-    // Room label
-    ctx.font = "bold 16px "+font; ctx.fillStyle="#b3aaff";
-    ctx.textAlign = "center";
-    ctx.fillText(rooms[gameState.room].name, CANVAS_BASE_W/2, 32);
+    // UI overlay update
+    updateUIOverlay();
+
+    // Screen shake
+    let shakeX = 0, shakeY = 0;
+    if (shakeTime > 0) {
+      shakeX = Math.round((Math.random()-0.5)*shakeMag);
+      shakeY = Math.round((Math.random()-0.5)*shakeMag);
+      shakeTime--;
+    }
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+    // Fade transitions
+    if (fading) {
+      fadeAlpha += 0.06*fadeDir;
+      if ((fadeDir>0 && fadeAlpha>=1) || (fadeDir<0 && fadeAlpha<=0)) {
+        fading = false;
+        if (fadeCallback) fadeCallback();
+      }
+      ctx.globalAlpha = Math.max(0, Math.min(1, fadeAlpha));
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+    ctx.restore();
+    // Timer
+    levelTimer++;
+
+    // Check if in normal mode and stage > 20
+    if (gameState.mode === 'normal' && gameState.stage > 20) {
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = '#181035';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.globalAlpha = 1;
+      ctx.font = 'bold 32px '+font;
+      ctx.fillStyle = '#ffe066';
+      ctx.textAlign = 'center';
+      ctx.fillText('YOU WIN!', CANVAS_BASE_W/2, CANVAS_BASE_H/2);
+      ctx.font = '16px '+font;
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Press R to restart', CANVAS_BASE_W/2, CANVAS_BASE_H/2+32);
+      ctx.restore();
+      return requestAnimationFrame(gameLoop);
+    }
+
     requestAnimationFrame(gameLoop);
   }
 
   function charAt(tx,ty) {
     let map = rooms[gameState.room].map;
-    if (tx<0||ty<0||ty>=map.length||tx>=map[0].length) return ' ';
-    return map[ty][tx];
+    if (!map || tx<0||ty<0||ty>=map.length||tx>=map[0].length) return ' ';
+    let ch = map[ty][tx];
+    if (!ch) return ' ';
+    return ch;
   }
   function collideWithMap(nx, ny) {
     let tx = Math.floor((nx+8)/TILE), ty = Math.floor((ny+16)/TILE);
     let ch = charAt(tx,ty);
     if (ch==='='||ch==='|') return {x: true, y: true};
+    // 'B' is not solid
     return {x: false, y: false};
   }
   function doorAt(tx,ty) {
@@ -560,47 +1259,152 @@
     if (map[ty][tx]==='+') return {x:tx,y:ty};
     return null;
   }
-  function switchRoom(name, tx, ty, hp, enemies, collectibles) {
-    gameState.room = name;
-    gameState.player.x = tx*TILE;
-    gameState.player.y = ty*TILE;
-    gameState.player.hp = hp||MAX_HP;
-    gameState.player.vy = 0;
-    gameState.player.jumpCount = 0;
-    gameState.player.invuln = 0;
-    gameState.player.attacking = false;
-    gameState.enemies = JSON.parse(JSON.stringify(enemies));
-    gameState.collectibles = JSON.parse(JSON.stringify(collectibles));
+  function removeFromMap(x, y, ch) {
+    let tx = Math.floor(x / TILE);
+    let ty = Math.floor(y / TILE);
+    let map = rooms[gameState.room].map;
+    if (map[ty][tx] === ch) {
+      map[ty] = map[ty].substring(0, tx) + ' ' + map[ty].substring(tx + 1);
+    }
   }
 
-// --- Restart on Game Over ---
-window.addEventListener("keydown", function(e){
-  if(gameOver && (e.key==="r"||e.key==="R")) {
-    let autogenRoom = generateRoom();
-    rooms = {
-      autogen: {
-        name: "Procedural Room",
-        map: autogenRoom.map,
-        doors: [ { x: autogenRoom.door.x, y: autogenRoom.door.y, target: "autogen", tx: 1, ty: autogenRoom.door.y } ],
-        bg: "#181035"
+  function applyPowerUpEffects(p) {
+    // Speed boost
+    let currentSpeed = PLAYER_SPEED;
+    if (gameState.activePowerups.SPEED_BOOST > 0) {
+      currentSpeed *= 1.5;
+      if (Math.random() < 0.2) { // Speed trail effect
+        createParticle(
+          p.x + 8 + (Math.random() * 8 - 4),
+          p.y + 8 + (Math.random() * 8 - 4),
+          '#ff0'
+        );
       }
-    };
-    Object.assign(gameState, {
-      room: "autogen",
-      player: {x: 32, y: 64, vx: 0, vy: 0, hp: MAX_HP, onGround: false, facing: 1, attacking: false, jumpCount: 0, invuln:0},
-      dialog: null,
-      enemies: JSON.parse(JSON.stringify(autogenRoom.enemies)),
-      collectibles: JSON.parse(JSON.stringify(autogenRoom.collectibles)),
-      notes: [],
-      corruption: 0,
-      score: 0
-    });
-    gameOver = false;
-  }
-});
+    }
 
-showDialog("Welcome to ZETA: Descent into Void");
-requestAnimationFrame(gameLoop);
+    // Shield effect
+    if (gameState.activePowerups.SHIELD > 0 && Math.random() < 0.1) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 12;
+      createParticle(
+        p.x + 8 + Math.cos(angle) * radius,
+        p.y + 8 + Math.sin(angle) * radius,
+        '#5f5'
+      );
+    }
+
+    // Double damage effect
+    if (gameState.activePowerups.DOUBLE_DAMAGE > 0 && p.attacking) {
+      const ax = p.facing > 0 ? p.x + 18 : p.x - 2;
+      const ay = p.y + 8;
+      if (Math.random() < 0.3) {
+        createParticle(
+          ax + (Math.random() * 8 - 4),
+          ay + (Math.random() * 8 - 4),
+          '#f55'
+        );
+      }
+    }
+
+    return currentSpeed;
+  }
+
+  // --- UI Overlay ---
+  const uiOverlay = document.getElementById('uiOverlay');
+  function updateUIOverlay() {
+    let powerupHTML = '';
+    let powerupY = 0;
+    for (let type in gameState.activePowerups) {
+      if (gameState.activePowerups[type] > 0) {
+        powerupHTML += `<span style='color:${POWERUP_TYPES[type].color};margin-left:1vw;font-size:1.5vw;'>${POWERUP_TYPES[type].symbol} ${Math.ceil(gameState.activePowerups[type]/60)}</span>`;
+        powerupY += 1;
+      }
+    }
+    let comboHTML = '';
+    if (comboMultiplier > 1) {
+      comboHTML = `<span style='color:#ff0;margin-left:1vw;font-size:1.5vw;'>x${comboMultiplier.toFixed(1)}</span>`;
+    }
+    uiOverlay.innerHTML = `
+      <div style="font-family:'Press Start 2P',monospace;font-size:2.2vw;color:#ffe066;text-shadow:2px 2px 0 #000,0 2px 0 #000,2px 0 0 #000;line-height:1.2;margin-top:1vw;">
+        <span style='color:#f33;font-size:2.5vw;'>${'♥'.repeat(Math.ceil(gameState.player.hp/2))}</span>
+        <span style='margin-left:1vw;'>Score: <b>${gameState.score}</b></span>
+        <span style='margin-left:2vw;color:#b3aaff;'>${rooms[gameState.room].name}</span>
+        <span style='margin-left:2vw;color:#fff;'>Stage: ${gameState.stage||1}</span>
+        ${powerupHTML}
+        ${comboHTML}
+        <span id='settingsIcon' style='margin-left:2vw;cursor:pointer;font-size:2vw;vertical-align:middle;' title='Settings'>⚙️</span>
+        <span style='margin-left:2vw;color:#fff;'>Mode: ${gameState.mode==='endless'?'Endless':'Normal'}</span>
+        <span style='margin-left:2vw;color:#fff;'>Time: ${(levelTimer/60).toFixed(2)}s</span>
+        <span style='margin-left:2vw;color:#fff;'>Best: ${(bestTimes[gameState.stage]||0)/60}s</span>
+      </div>
+    `;
+    // Add settings menu event
+    setTimeout(() => {
+      const icon = document.getElementById('settingsIcon');
+      if (icon) {
+        icon.onclick = showSettingsMenu;
+      }
+    }, 0);
+  }
+
+  // --- Settings menu logic ---
+  function showSettingsMenu() {
+    if (document.getElementById('settingsMenu')) return;
+    const menu = document.createElement('div');
+    menu.id = 'settingsMenu';
+    menu.style.position = 'fixed';
+    menu.style.top = '50%';
+    menu.style.left = '50%';
+    menu.style.transform = 'translate(-50%,-50%)';
+    menu.style.background = '#222';
+    menu.style.color = '#fff';
+    menu.style.padding = '32px 40px';
+    menu.style.border = '3px solid #b3aaff';
+    menu.style.borderRadius = '16px';
+    menu.style.zIndex = 1000;
+    menu.style.fontFamily = "'Press Start 2P',monospace";
+    menu.style.textAlign = 'center';
+    menu.innerHTML = `
+      <div style='font-size:2vw;margin-bottom:18px;'>Settings</div>
+      <button id='modeEndless' style='font-size:1.2vw;margin:8px;padding:8px 24px;border-radius:8px;border:2px solid #b3aaff;background:${gameState.mode==='endless'?'#333':'#181035'};color:#fff;cursor:pointer;'>Endless Mode</button>
+      <button id='modeNormal' style='font-size:1.2vw;margin:8px;padding:8px 24px;border-radius:8px;border:2px solid #b3aaff;background:${gameState.mode==='normal'?'#333':'#181035'};color:#fff;cursor:pointer;'>Normal Mode (20 Levels)</button>
+      <br><br><button id='closeSettings' style='font-size:1vw;margin-top:12px;padding:6px 18px;border-radius:8px;border:2px solid #b3aaff;background:#181035;color:#fff;cursor:pointer;'>Close</button>
+    `;
+    document.body.appendChild(menu);
+    document.getElementById('modeEndless').onclick = () => { gameState.mode = 'endless'; updateUIOverlay(); menu.remove(); };
+    document.getElementById('modeNormal').onclick = () => { gameState.mode = 'normal'; updateUIOverlay(); menu.remove(); };
+    document.getElementById('closeSettings').onclick = () => menu.remove();
+  }
+
+  // --- 3. Dash Ability ---
+  let dashTimer = 0, dashDir = 0;
+  window.addEventListener('keydown', e => {
+    if ((e.key==='Shift' || e.key==='z') && dashTimer<=0 && !dialogActive) {
+      dashDir = gameState.player.facing;
+      dashTimer = 12;
+      triggerShake(6, 8);
+    }
+  });
+
+  // --- 4. Pause Menu & Sound Toggle ---
+  let paused = false, soundOn = true;
+  window.addEventListener('keydown', e => {
+    if (e.key==='Escape') paused = !paused;
+    if (e.key==='m') soundOn = !soundOn;
+  });
+
+  // --- 5. Level Timer & Best Time ---
+  let levelTimer = 0;
+  let bestTimes = JSON.parse(localStorage.getItem('zeta_best_times')||'{}');
+  function saveBestTime(stage, time) {
+    if (!bestTimes[stage] || time < bestTimes[stage]) {
+      bestTimes[stage] = time;
+      localStorage.setItem('zeta_best_times', JSON.stringify(bestTimes));
+    }
+  }
+
+  showDialog("Welcome to ZETA: Descent into Void");
+  requestAnimationFrame(gameLoop);
 
 </script>
 </body>
